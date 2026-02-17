@@ -11,6 +11,7 @@ import Register from "./pages/Register";
 import UserList from "./pages/UserList";
 import Policies from "./pages/Policies";
 import ProtectedRoute from "./components/ProtectedRoute";
+import DataAccess from "./pages/DataAccess";  
 
 function App() {
   return (
@@ -66,7 +67,7 @@ function App() {
             <Policies />
           </ProtectedRoute>
         } />
-
+<Route path="/data-access" element={<DataAccess />} />
       </Routes>
     </BrowserRouter>
   );

@@ -1,42 +1,65 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
+import api from "../services/api";
 import "../App.css";
 
 function Dashboard() {
+
   const navigate = useNavigate();
 
   const role = localStorage.getItem("role");
   const user = localStorage.getItem("user");
   const department = localStorage.getItem("department");
 
-  const [recentApprovals, setRecentApprovals] = useState([]);
+  const [accessLinks, setAccessLinks] = useState([]);
 
-  const logout = () => {
-    localStorage.clear();
-    navigate("/");
+  // Load access links when dashboard opens
+  useEffect(() => {
+
+    if (user) {
+      loadAccessLinks();
+    }
+
+  }, []);
+
+  // Fetch approved access policies
+  const loadAccessLinks = async () => {
+
+    try {
+
+      const res = await api.get(`/access/my-access-links/${user}`);
+
+      if (res.data.result && res.data.result.data_array) {
+
+        setAccessLinks(res.data.result.data_array);
+
+      }
+
+    } catch (error) {
+
+      console.log("Error loading access links:", error);
+
+    }
+
   };
 
-  // Fetch recent approvals for admin
-  useEffect(() => {
-    if (role === "admin") {
-      axios
-        .get("http://localhost:5000/api/access/recent-approvals")
-        .then((res) => {
-          if (res.data.result && res.data.result.data_array) {
-            setRecentApprovals(res.data.result.data_array);
-          }
-        })
-        .catch((err) => console.error(err));
-    }
-  }, [role]);
+  const logout = () => {
+
+    localStorage.clear();
+    navigate("/");
+
+  };
 
   return (
+
     <div className="outer-wrapper">
+
       <div className="dashboard-box">
 
         {/* ================= SIDEBAR ================= */}
+
         <div className="sidebar">
+
           <div className="sidebar-header">
             <h3>Access Portal</h3>
           </div>
@@ -44,7 +67,9 @@ function Dashboard() {
           <div className="menu-item active">🏠 Dashboard</div>
 
           {/* CUSTOMER MENU */}
+
           {role === "customer" && (
+
             <>
               <Link to="/request" className="menu-link">
                 <div className="menu-item">📄 Request Access</div>
@@ -54,10 +79,13 @@ function Dashboard() {
                 <div className="menu-item">📋 My Requests</div>
               </Link>
             </>
+
           )}
 
           {/* ADMIN MENU */}
+
           {role === "admin" && (
+
             <>
               <Link to="/approvals" className="menu-link">
                 <div className="menu-item">✔ Approve Requests</div>
@@ -79,37 +107,104 @@ function Dashboard() {
                 <div className="menu-item">📊 Audit Logs</div>
               </Link>
             </>
+
           )}
+
         </div>
 
         {/* ================= MAIN CONTENT ================= */}
+
         <div className="content">
 
           {/* TOP BAR */}
+
           <div className="topbar">
+
             <div className="profile">
               <strong>{user}</strong>
             </div>
+
           </div>
 
-          {/* USER INFO SECTION */}
+          {/* USER INFO */}
+
           <div className="section-box">
+
             <h2>Welcome, {user}</h2>
 
-            <p><strong>Role:</strong> {role}</p>
+            <div className="info-row">
+              <span><strong>Role:</strong></span>
+              <span>{role}</span>
+            </div>
 
             {department && (
-              <p><strong>Department:</strong> {department}</p>
+
+              <div className="info-row">
+                <span><strong>Department:</strong></span>
+                <span>{department}</span>
+              </div>
+
             )}
+
+          </div>
+
+          {/* ================= ACCESS LINKS SECTION ================= */}
+
+          <div className="section-box">
+
+            <h3>My Data Access</h3>
+
+            {accessLinks.length === 0 && (
+
+              <p>No access granted yet. Request access from admin.</p>
+
+            )}
+
+            {accessLinks.map((link, index) => {
+
+              const catalog = link[0];
+              const schema = link[1];
+              const table = link[2];
+
+              const databricksLink =
+                `https://dbc-6c5e2a27-b2cf.cloud.databricks.com/explore/data/${catalog}/${schema}/${table}`;
+
+              return (
+
+                <div key={index} className="info-row">
+
+                  <span>
+                    {catalog}.{schema}.{table}
+                  </span>
+
+                  <a
+                    href={databricksLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="quick-btn"
+                    style={{ marginLeft: "15px" }}
+                  >
+                    Open
+                  </a>
+
+                </div>
+
+              );
+
+            })}
+
           </div>
 
           {/* QUICK ACTIONS */}
+
           <div className="section-box">
+
             <h3>Quick Actions</h3>
 
             <div className="quick-links">
 
               {role === "customer" && (
+
                 <>
                   <Link to="/request" className="quick-btn">
                     Request Access
@@ -119,9 +214,11 @@ function Dashboard() {
                     View My Requests
                   </Link>
                 </>
+
               )}
 
               {role === "admin" && (
+
                 <>
                   <Link to="/approvals" className="quick-btn">
                     Approve Requests
@@ -143,45 +240,17 @@ function Dashboard() {
                     Audit Logs
                   </Link>
                 </>
+
               )}
 
             </div>
+
           </div>
 
-          {/* RECENT APPROVALS (ADMIN ONLY) */}
-          {role === "admin" && (
-            <div className="section-box">
-              <h3>Recent Approvals</h3>
+          {/* FOOTER */}
 
-              {recentApprovals.length === 0 ? (
-                <p>No recent approvals found.</p>
-              ) : (
-                <table className="approval-table">
-                  <thead>
-                    <tr>
-                      <th>User</th>
-                      <th>Schema</th>
-                      <th>Table</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentApprovals.map((item, index) => (
-                      <tr key={index}>
-                        <td>{item[0]}</td>
-                        <td>{item[2]}</td>
-                        <td>{item[3]}</td>
-                        <td>{item[5]}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          )}
-
-          {/* FOOTER BUTTONS */}
           <div className="bottom-buttons">
+
             <button className="back-btn" onClick={() => navigate(-1)}>
               ⬅ Back
             </button>
@@ -189,12 +258,17 @@ function Dashboard() {
             <button className="logout-btn" onClick={logout}>
               Logout
             </button>
+
           </div>
 
         </div>
+
       </div>
+
     </div>
+
   );
+
 }
 
 export default Dashboard;
