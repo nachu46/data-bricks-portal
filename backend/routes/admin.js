@@ -1,53 +1,59 @@
+"use strict";
+
 const express = require("express");
 const router = express.Router();
-const { runQuery } = require("../services/databricksService");
+const db = require("../services/databricksService");
+const { requireAdmin } = require("../middleware/auth");
 
-// Get all pending requests
-router.get("/pending", async (req, res) => {
+// ── GET /admin/pending — All pending access requests
+router.get("/pending", requireAdmin, async (req, res) => {
   try {
-    const sql = `
-      SELECT * FROM governance.user_requests
-      WHERE status='PENDING'
-    `;
-
-    const data = await runQuery(sql);
-
-    res.send(data);
-  } catch (error) {
-    res.status(500).send({ error: error.message });
+    const data = await db.getPendingRequests();
+    res.json(data);
+  } catch (err) {
+    console.error("❌ Pending requests:", err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
-// Approve a request
-router.post("/approve", async (req, res) => {
+// ── POST /admin/approve — Approve a request
+router.post("/approve", requireAdmin, async (req, res) => {
+  const { user, table } = req.body;
+  if (!user || !table)
+    return res.status(400).json({ error: "user and table are required" });
+
   try {
-    const { user, table } = req.body;
-
-    const sql = `
-      UPDATE governance.user_requests
-      SET status='APPROVED'
-      WHERE user='${user}' AND table='${table}'
-    `;
-
-    await runQuery(sql);
-
-    res.send({ message: "Request approved successfully" });
-  } catch (error) {
-    res.status(500).send({ error: error.message });
+    await db.approveRequest(user, table);
+    res.json({ success: true, message: "Request approved successfully" });
+  } catch (err) {
+    console.error("❌ Approve:", err.message);
+    res.status(500).json({ error: err.message });
   }
 });
-// Get all audit logs
-router.get("/logs", async (req, res) => {
+
+// ── POST /admin/reject — Reject a request
+router.post("/reject", requireAdmin, async (req, res) => {
+  const { user, table } = req.body;
+  if (!user || !table)
+    return res.status(400).json({ error: "user and table are required" });
+
   try {
-    const sql = `
-      SELECT * FROM governance.user_requests
-    `;
+    await db.rejectRequest(user, table);
+    res.json({ success: true, message: "Request rejected" });
+  } catch (err) {
+    console.error("❌ Reject:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    const data = await runQuery(sql);
-
-    res.send(data);
-  } catch (error) {
-    res.status(500).send({ error: error.message });
+// ── GET /admin/logs — All audit logs
+router.get("/logs", requireAdmin, async (req, res) => {
+  try {
+    const data = await db.getAuditLogs();
+    res.json(data);
+  } catch (err) {
+    console.error("❌ Audit logs:", err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 

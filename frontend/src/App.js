@@ -11,7 +11,8 @@ import Register from "./pages/Register";
 import UserList from "./pages/UserList";
 import Policies from "./pages/Policies";
 import ProtectedRoute from "./components/ProtectedRoute";
-import DataAccess from "./pages/DataAccess";  
+import DataAccess from "./pages/DataAccess";
+import AdminAssignAccess from "./pages/AdminAssignAccess";
 
 function App() {
   return (
@@ -67,7 +68,26 @@ function App() {
             <Policies />
           </ProtectedRoute>
         } />
-<Route path="/data-access" element={<DataAccess />} />
+
+        {/* Bug 9 Fixed: Now protected */}
+        <Route path="/data-access" element={
+          <ProtectedRoute>
+            <DataAccess />
+          </ProtectedRoute>
+        } />
+
+        {/* Admin Assign Access — both route names supported */}
+        <Route path="/assign-access" element={
+          <ProtectedRoute allowedRole="admin">
+            <AdminAssignAccess />
+          </ProtectedRoute>
+        } />
+        <Route path="/admin-assign-access" element={
+          <ProtectedRoute allowedRole="admin">
+            <AdminAssignAccess />
+          </ProtectedRoute>
+        } />
+
       </Routes>
     </BrowserRouter>
   );
