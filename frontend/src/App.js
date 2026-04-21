@@ -20,28 +20,11 @@ function App() {
       <Routes>
 
         <Route path="/" element={<Login />} />
+        <Route path="/login" element={<Login />} />
 
         <Route path="/dashboard" element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        } />
-
-        <Route path="/request" element={
-          <ProtectedRoute allowedRole="customer">
-            <RequestAccess />
-          </ProtectedRoute>
-        } />
-
-        <Route path="/myrequests" element={
-          <ProtectedRoute allowedRole="customer">
-            <MyRequests />
-          </ProtectedRoute>
-        } />
-
-        <Route path="/approvals" element={
           <ProtectedRoute allowedRole="admin">
-            <Approvals />
+            <Dashboard />
           </ProtectedRoute>
         } />
 
@@ -69,14 +52,12 @@ function App() {
           </ProtectedRoute>
         } />
 
-        {/* Bug 9 Fixed: Now protected */}
         <Route path="/data-access" element={
-          <ProtectedRoute>
+          <ProtectedRoute allowedRole="admin">
             <DataAccess />
           </ProtectedRoute>
         } />
 
-        {/* Admin Assign Access — both route names supported */}
         <Route path="/assign-access" element={
           <ProtectedRoute allowedRole="admin">
             <AdminAssignAccess />

@@ -13,17 +13,20 @@ function Login() {
     try {
       setLoading(true);
       setError("");
-      const res = await api.post("/access/login", { email, password });
+      // Use the new /admin/login endpoint
+      const res = await api.post("/admin/login", { email, password });
 
       if (res.data.success) {
-        localStorage.setItem("user", res.data.email);
-        localStorage.setItem("role", res.data.role);
+        // Store JWT token along with user info
+        localStorage.setItem("token", res.data.data.token);
+        localStorage.setItem("user", res.data.data.user.email);
+        localStorage.setItem("role", res.data.data.user.role);
         window.location.href = "/dashboard";
       } else {
         setError("Invalid email or password");
       }
     } catch (error) {
-      setError("Login error. Please try again.");
+      setError(error.response?.data?.error || "Login failed. Please check your credentials.");
       console.log(error);
     } finally {
       setLoading(false);

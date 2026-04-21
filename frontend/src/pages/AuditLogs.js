@@ -17,19 +17,17 @@ function AuditLogs() {
   const load = async () => {
     try {
       setLoading(true);
-      const res = await api.get("/admin/logs", {
-        headers: { role: localStorage.getItem("role") }
-      });
-      console.log("API Response:", res.data);
-
-      if (res.data.result && res.data.result.data_array) {
-        setLogs(res.data.result.data_array);
+      // Call the new admin logs endpoint
+      const res = await api.get("/admin/audit-logs");
+      
+      if (res.data.success && res.data.data) {
+        setLogs(res.data.data);
       } else {
         setLogs([]);
       }
     } catch (error) {
       console.log("Error:", error);
-      showToast("Failed to load logs", "error");
+      showToast("Failed to load audit logs", "error");
     } finally {
       setLoading(false);
     }
@@ -38,6 +36,11 @@ function AuditLogs() {
   const showToast = (message, type = "success") => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
+  };
+
+  const fmtTs = (ts) => {
+    if (!ts) return "—";
+    try { return new Date(ts).toLocaleString(); } catch { return ts; }
   };
 
   return (
@@ -112,7 +115,7 @@ function AuditLogs() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
               <thead>
                 <tr>
-                  {["Time", "User", "Table", "Privileges", "Action", "Executed By"].map(h => (
+                  {["Time", "Action", "User Email", "Table"].map(h => (
                     <th key={h} style={{ padding: "12px 16px", textAlign: "left", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", fontSize: "11px", borderBottom: "1px solid #e2e8f0" }}>{h}</th>
                   ))}
                 </tr>
@@ -120,22 +123,18 @@ function AuditLogs() {
               <tbody>
                 {logs.map((log, index) => (
                   <tr key={index} style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" }} onMouseEnter={e => e.currentTarget.style.background = "#f8fafc"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                    <td style={{ padding: "14px 16px", color: "#94a3b8", whiteSpace: "nowrap" }}>{log[8] || "—"}</td>
-                    <td style={{ padding: "14px 16px", fontWeight: 600, color: "#1e293b" }}>{log[3]}</td>
-                    <td style={{ padding: "14px 16px", color: "#475569", fontFamily: "monospace", fontSize: "12px" }}>{log[4]}.{log[5]}.{log[6]}</td>
-                    <td style={{ padding: "14px 16px", color: "#1d4ed8", fontWeight: 600 }}>
-                      <span style={{ display: "inline-block", background: "#dbeafe", color: "#1d4ed8", padding: "2px 10px", borderRadius: "20px", fontSize: "11px" }}>{log[7]}</span>
-                    </td>
+                    <td style={{ padding: "14px 16px", color: "#94a3b8", whiteSpace: "nowrap" }}>{fmtTs(log.timestamp)}</td>
                     <td style={{ padding: "14px 16px" }}>
                       <span style={{
                         display: "inline-block", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 700,
-                        background: log[1]?.toLowerCase().includes("fail") ? "#fef2f2" : "#dcfce7",
-                        color: log[1]?.toLowerCase().includes("fail") ? "#dc2626" : "#15803d"
+                        background: log.action === "GRANT" ? "#dcfce7" : "#fef2f2",
+                        color: log.action === "GRANT" ? "#15803d" : "#dc2626"
                       }}>
-                        {log[1]}
+                        {log.action}
                       </span>
                     </td>
-                    <td style={{ padding: "14px 16px", color: "#64748b" }}>{log[2]}</td>
+                    <td style={{ padding: "14px 16px", fontWeight: 600, color: "#1e293b" }}>{log.user_email}</td>
+                    <td style={{ padding: "14px 16px", color: "#475569", fontFamily: "monospace", fontSize: "12px" }}>{log.table_name}</td>
                   </tr>
                 ))}
               </tbody>

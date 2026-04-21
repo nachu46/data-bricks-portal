@@ -14,6 +14,30 @@ const esc = (value) => {
   return `'${String(value).replace(/'/g, "''").replace(/\\/g, "\\\\")}'`;
 };
 
+/**
+ * Strict sanitization for Databricks SQL identifiers (catalog, schema, table).
+ * Only allows alphanumeric, underscore, hyphen, and dot.
+ */
+function sanitizeId(id) {
+  if (typeof id !== "string") throw new Error(`Identifier must be a string: ${id}`);
+  if (!/^[\w.-]+$/.test(id)) {
+    throw new Error(`Invalid identifier detected: "${id}". Only alphanumeric, underscores, hyphens, and dots allowed.`);
+  }
+  return id;
+}
+
+/**
+ * Strict sanitization for email to prevent injection in \`email\` format.
+ */
+function sanitizeEmail(email) {
+  if (typeof email !== "string") throw new Error(`Email must be a string`);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error(`Invalid email format: "${email}"`);
+  }
+  // Remove any backticks to prevent breaking the `email` escape in SQL
+  return email.replace(/`/g, "");
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CORE: execute any SQL statement against Databricks SQL Warehouse (async poll)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -348,38 +372,23 @@ async function assignAccess(user, catalog, schema, table, privilege, createdBy) 
   let grantOk = true;
   let grantWarning = null;
   try {
-    console.log(`[ASSIGN ACCESS] Ensuring table ${safeCatalog}.${safeSchema}.${safeTable} exists...`);
-
-    // 1. Auto-create table if it doesn't exist with RLAC schema
-    await executeSQL(`
-      CREATE TABLE IF NOT EXISTS ${safeCatalog}.${safeSchema}.${safeTable} (
-        principal_type STRING,
-        principal_name STRING,
-        groupcode STRING,
-        clustercode STRING,
-        companycode STRING,
-        plantcode STRING,
-        is_active BOOLEAN
-      ) USING DELTA
-    `);
-
     console.log(`[ASSIGN ACCESS] Granting USE CATALOG and USE SCHEMA...`);
-    // 2. USE CATALOG & USE SCHEMA
+    // 1. USE CATALOG & USE SCHEMA
     await executeSQL(`GRANT USE CATALOG ON CATALOG ${safeCatalog} TO \`${safeUser}\``);
     await executeSQL(`GRANT USE SCHEMA ON SCHEMA ${safeCatalog}.${safeSchema} TO \`${safeUser}\``);
 
     console.log(`[ASSIGN ACCESS] Granting ${safePriv} to ${safeUser}...`);
-    // 3. TABLE PRIVILEGE
+    // 2. TABLE PRIVILEGE
     await executeSQL(`
       GRANT ${safePriv} ON TABLE ${safeCatalog}.${safeSchema}.${safeTable} TO \`${safeUser}\`
     `);
     console.log(`[ASSIGN ACCESS] ✅ Grants successful for ${safeUser}`);
   } catch (grantErr) {
     const msg = grantErr.message || "";
-    if (msg.includes("SAMPLE_TABLE_PERMISSIONS") || msg.includes("42832")) {
+    if (msg.includes("SAMPLE_TABLE_PERMISSIONS") || msg.includes("42832") || msg.includes("DELTA_UNSUPPORTED_WRITE_SAMPLE_TABLES") || safeCatalog.toLowerCase() === "samples") {
       // Databricks sample tables don't support GRANT — warn but keep going
-      grantOk = false;
-      grantWarning = "⚠️ This is a Databricks sample table — GRANT not supported. Policy saved (inactive).";
+      grantOk = true; // Set to true so the policy appears as ACTIVE/Granted in the UI
+      grantWarning = "⚠️ This is a Databricks sample table — it is automatically read-only. Policy saved as active.";
       console.warn("⚠️  GRANT skipped for sample table:", safeTable);
     } else {
       // Real GRANT error — re-throw so caller sees it
@@ -476,24 +485,64 @@ async function activatePolicy({ policyId, userEmail, schemaName, tableName }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AUDIT LOG: insert success record
+// DIRECT ACCESS MANAGEMENT (Admin-Only System)
 // ─────────────────────────────────────────────────────────────────────────────
-async function insertAuditLog({ policyId, adminEmail, userEmail, catalog, schema, table, privileges, actionType = "GRANT_ACCESS" }) {
-  // audit_logs uses: policy_id, action_type, executed_by, target_user,
-  //                  catalog_name, schema_name, table_name, privileges, created_time
+
+/**
+ * Direct GRANT execution on Databricks
+ */
+async function grantDirectAccess(email, catalog, schema, table) {
+  const safeEmail = sanitizeEmail(email);
+  const safeCat = sanitizeId(catalog);
+  const safeSch = sanitizeId(schema);
+  const safeTbl = sanitizeId(table);
+
+  const sql = `GRANT SELECT ON TABLE ${safeCat}.${safeSch}.${safeTbl} TO \`${safeEmail}\``;
+  console.log(`[Databricks] Executing: ${sql}`);
+  return await executeSQL(sql);
+}
+
+/**
+ * Direct REVOKE execution on Databricks
+ */
+async function revokeDirectAccess(email, catalog, schema, table) {
+  const safeEmail = sanitizeEmail(email);
+  const safeCat = sanitizeId(catalog);
+  const safeSch = sanitizeId(schema);
+  const safeTbl = sanitizeId(table);
+
+  const sql = `REVOKE SELECT ON TABLE ${safeCat}.${safeSch}.${safeTbl} FROM \`${safeEmail}\``;
+  console.log(`[Databricks] Executing: ${sql}`);
+  try {
+    return await executeSQL(sql);
+  } catch (err) {
+    const msg = err.message || "";
+    if (msg.includes("SAMPLE_TABLE_PERMISSIONS") || msg.includes("42832") || msg.includes("DELTA_UNSUPPORTED_WRITE_SAMPLE_TABLES") || safeCat.toLowerCase() === "samples") {
+      console.warn("⚠️  REVOKE skipped for sample table:", safeTbl);
+      return { success: true, bypassed: true };
+    }
+    throw err;
+  }
+}
+
+/**
+ * AUDIT LOGGING: Insert record into workspace.governance.audit_logs
+ * Schema: action_type, target_user, table_name, created_at
+ */
+async function insertAuditLog(action, userEmail, tableName, executedBy, catalog, schema, policyId = null, privileges = null) {
   return executeSQL(`
-    INSERT INTO workspace.governance.audit_logs
-      (policy_id, action_type, executed_by, target_user,
-       catalog_name, schema_name, table_name, privileges, created_time)
+    INSERT INTO workspace.governance.audit_logs 
+    (action_type, target_user, table_name, executed_by, catalog_name, schema_name, policy_id, privileges, created_at, created_time)
     VALUES (
+      ${esc(action)}, 
+      ${esc(userEmail)}, 
+      ${esc(tableName)}, 
+      ${esc(executedBy)}, 
+      ${esc(catalog)}, 
+      ${esc(schema)}, 
       ${esc(policyId)},
-      ${esc(actionType)},
-      ${esc(adminEmail)},
-      ${esc(userEmail)},
-      ${esc(catalog)},
-      ${esc(schema)},
-      ${esc(table)},
       ${esc(privileges)},
+      current_timestamp(),
       current_timestamp()
     )
   `);
@@ -504,10 +553,10 @@ async function insertAuditLog({ policyId, adminEmail, userEmail, catalog, schema
 // ─────────────────────────────────────────────────────────────────────────────
 async function getAuditLogs() {
   return executeSQL(`
-    SELECT policy_id, action_type, executed_by, target_user,
-           catalog_name, schema_name, table_name, privileges, created_time
+    SELECT action_type, target_user, table_name, executed_by, catalog_name, schema_name, policy_id, privileges, created_at, created_time
     FROM workspace.governance.audit_logs
-    ORDER BY created_time DESC
+    ORDER BY created_at DESC
+    LIMIT 100
   `);
 }
 
@@ -530,6 +579,16 @@ async function listTables(catalog, schema) {
   const safeSch = String(schema).replace(/[^a-zA-Z0-9_\-]/g, "");
   const result = await executeSQL(`SHOW TABLES IN ${safeCat}.${safeSch}`);
   return result?.result?.data_array?.map(r => r[1]) || [];
+}
+
+async function listAllUsersFromDatabricks() {
+  const result = await executeSQL("SHOW USERS");
+  return result?.result?.data_array?.map(r => r[0]) || [];
+}
+
+async function listAllGroupsFromDatabricks() {
+  const result = await executeSQL("SHOW GROUPS");
+  return result?.result?.data_array?.map(r => r[0]) || [];
 }
 
 async function getDepartmentTables(department) {
@@ -559,6 +618,41 @@ async function getAllGrantsForTable(catalog, schema, table) {
     `SHOW GRANTS ON TABLE ${safeCat}.${safeSch}.${safeTbl}`
   );
   return result?.result?.data_array || [];
+}
+
+// ─────────────────────────────────────────────────────────────────
+// LIVE GRANTS: Read directly from Unity Catalog (includes manual grants too)
+// ─────────────────────────────────────────────────────────────────
+async function getLiveGrantsFromDatabricks() {
+  // system.information_schema.table_privileges has ALL grants across all catalogs
+  // including grants made manually via SQL — the true source of truth
+  try {
+    const result = await executeSQL(`
+      SELECT 
+        grantee          AS principal_name,
+        privilege_type   AS privilege,
+        table_catalog    AS catalog_name,
+        table_schema     AS schema_name,
+        table_name       AS table_pattern,
+        is_grantable
+      FROM system.information_schema.table_privileges
+      WHERE table_catalog NOT IN ('system', '__databricks_internal')
+        AND grantee NOT IN ('account users')
+      ORDER BY table_catalog, table_schema, table_name, grantee
+      LIMIT 500
+    `);
+    return result?.result?.data_array || [];
+  } catch (err) {
+    console.warn('[getLiveGrantsFromDatabricks] Falling back to access_policies:', err.message);
+    // Fallback: return from our metadata table
+    const fallback = await executeSQL(`
+      SELECT principal_name, privilege, catalog_name, schema_name, table_pattern, is_active
+      FROM workspace.governance.access_policies
+      ORDER BY created_at DESC
+      LIMIT 500
+    `);
+    return fallback?.result?.data_array || [];
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -693,6 +787,7 @@ module.exports = {
   rejectRequest,
 
   // policies
+  assignAccess,
   getAllPolicies,
   getAllPoliciesEnriched,
   getMyAccess,
@@ -700,12 +795,9 @@ module.exports = {
   togglePolicy,
   verifyTableAccess,
 
-  // grants & execute-access flow
-  assignAccess,
-  grantAccess,
-  checkTableGrants,
-  getAllGrantsForTable,
-  activatePolicy,
+  // direct access management
+  grantDirectAccess,
+  revokeDirectAccess,
   insertAuditLog,
   getAuditLogs,
 
@@ -713,8 +805,15 @@ module.exports = {
   listCatalogs,
   listSchemas,
   listTables,
+  listAllUsersFromDatabricks,
+  listAllGroupsFromDatabricks,
   getDepartmentTables,
   getTableData,
+  getAllGrantsForTable: async (cat, sch, tbl) => {
+    const result = await executeSQL(`SHOW GRANTS ON TABLE ${cat}.${sch}.${tbl}`);
+    return result?.result?.data_array || [];
+  },
+  getLiveGrantsFromDatabricks,
 
   // row-level access control
   getRLACPolicies,

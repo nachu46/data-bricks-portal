@@ -44,6 +44,54 @@ function Toast({ toast }) {
     );
 }
 
+// ─── Confirm Modal ─────────────────────────────────────────────────────────────
+function ConfirmModal({ isOpen, title, message, onConfirm, onCancel, confirmText = "Confirm", isDestructive = false }) {
+    if (!isOpen) return null;
+    const color = isDestructive ? "#ef4444" : "#10b981";
+    const bgLight = isDestructive ? "#fef2f2" : "#f0fdf4";
+    return (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(100,116,139,0.3)", backdropFilter: "blur(4px)", zIndex: 3000, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }} onClick={onCancel}>
+            <div style={{ background: "#fff", borderRadius: 20, width: "100%", maxWidth: 440, boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)", overflow: "hidden", animation: "fadeIn 0.2s ease", padding: "36px 32px 24px", display: "flex", flexDirection: "column", alignItems: "center", position: "relative" }} onClick={e => e.stopPropagation()}>
+
+                {/* Shield Icon */}
+                <div style={{ width: 56, height: 56, borderRadius: "50%", background: bgLight, color: color, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 24, boxShadow: `0 0 0 8px ${bgLight}` }}>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                </div>
+
+                {/* Title */}
+                <h2 style={{ margin: 0, fontSize: "24px", fontWeight: 700, color: "#1f2937", textAlign: "center", fontFamily: "inherit" }}>{title}</h2>
+
+                {/* Divider Line */}
+                <div style={{ width: 40, height: 3, background: color, margin: "16px 0", borderRadius: 2 }} />
+
+                {/* Message Body */}
+                <div style={{ width: "100%", textAlign: "center", color: "#4b5563", fontSize: "15px", lineHeight: "1.6", marginBottom: 32 }}>
+                    {message}
+                </div>
+
+                {/* Footer Buttons */}
+                <div style={{ width: "100%", display: "flex", gap: "12px", borderTop: "1px solid #f3f4f6", paddingTop: "24px", justifyContent: "center" }}>
+                    <button onClick={onCancel} style={{ flex: 1, padding: "12px", background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 10, fontWeight: 600, fontSize: "14px", cursor: "pointer", transition: "all 0.2s", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        Cancel
+                    </button>
+                    <button onClick={onConfirm} style={{ flex: 1, padding: "12px", background: color, color: "#fff", border: "none", borderRadius: 10, fontWeight: 600, fontSize: "14px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: `0 4px 14px ${isDestructive ? "rgba(239, 68, 68, 0.4)" : "rgba(16, 185, 129, 0.4)"}`, transition: "all 0.2s" }}>
+                        {confirmText}
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                            <line x1="12" y1="8" x2="12" y2="12" />
+                            <line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ─── TAB 1: Grant Access ───────────────────────────────────────────────────────
 function GrantAccessTab() {
     const [catalogs, setCatalogs] = useState([]);
@@ -55,6 +103,8 @@ function GrantAccessTab() {
     const [submitting, setSubmitting] = useState(false);
     const [policies, setPolicies] = useState([]);
     const [loadingPolicies, setLP] = useState(false);
+    const [availableUsers, setAvailableUsers] = useState([]);
+    const [loadingUsers, setLoadingUsers] = useState(false);
     const [form, setForm] = useState({ user: "", catalog: "", schema: "", table: "", privilege: "SELECT" });
     const [toast, setToast] = useState(null);
 
@@ -63,13 +113,19 @@ function GrantAccessTab() {
         setTimeout(() => setToast(null), 4000);
     };
 
-    // Load catalogs on mount
+    // Load catalogs and available users on mount
     useEffect(() => {
         setLC(true);
         api.get("/access/catalogs", { headers: adminHeaders() })
             .then(r => setCatalogs(r.data?.catalogs || []))
             .catch(() => showToast("Failed to load catalogs", "error"))
             .finally(() => setLC(false));
+
+        setLoadingUsers(true);
+        api.get("/admin/users-list", { headers: adminHeaders() })
+            .then(r => setAvailableUsers(r.data?.users || []))
+            .catch(() => console.error("Failed to load user suggestions"))
+            .finally(() => setLoadingUsers(false));
     }, []);
 
     // Load schemas when catalog changes
@@ -98,9 +154,21 @@ function GrantAccessTab() {
     const loadPolicies = useCallback(async () => {
         setLP(true);
         try {
-            const r = await api.get("/access/policies-all", { headers: adminHeaders() });
-            setPolicies(r.data?.result?.data_array || []);
-        } catch { /* silent */ }
+            // live-grants reads DIRECTLY from Databricks Unity Catalog
+            // It includes both portal grants AND manual grants made via SQL Editor
+            const r = await api.get("/admin/live-grants", { headers: adminHeaders() });
+            setPolicies(r.data?.data || []);
+        } catch {
+            // Fallback silently to metadata table
+            try {
+                const r2 = await api.get("/access/policies-all", { headers: adminHeaders() });
+                const rows = r2.data?.result?.data_array || [];
+                setPolicies(rows.map(p => ({
+                    user_email: p[1], privilege: p[6], catalog_name: p[3],
+                    schema_name: p[4], table_name: p[5], source: "portal"
+                })));
+            } catch { /* silent */ }
+        }
         finally { setLP(false); }
     }, []);
 
@@ -112,15 +180,12 @@ function GrantAccessTab() {
         if (!canSubmit) { showToast("Please fill in all fields", "error"); return; }
         setSubmitting(true);
         try {
-            const res = await api.post("/access/assign", form, { headers: adminHeaders() });
+            // Updated to call /admin/grant-access directly
+            const res = await api.post("/admin/grant-access", form);
             if (res.data.success) {
-                if (res.data.warning) {
-                    showToast(res.data.message, "warning");
-                } else {
-                    showToast("Access granted successfully");
-                    setForm({ user: "", catalog: "", schema: "", table: "", privilege: "SELECT" });
-                    setSchemas([]); setTables([]);
-                }
+                showToast("Access granted successfully");
+                setForm({ user: "", catalog: "", schema: "", table: "", privilege: "SELECT" });
+                setSchemas([]); setTables([]);
                 loadPolicies(); // Refresh the table below
             } else {
                 showToast("Failed to assign access", "error");
@@ -128,6 +193,34 @@ function GrantAccessTab() {
         } catch (err) {
             showToast(err.response?.data?.error || "Failed to assign access", "error");
         } finally { setSubmitting(false); }
+    };
+
+    const [confirmModal, setConfirmModal] = useState(null);
+
+    const revoke = (email, catalog, schema, table) => {
+        setConfirmModal({
+            title: "Revoke Access",
+            message: (
+                <>
+                    Are you sure you want to revoke access for<br />
+                    <strong style={{ color: "#1f2937", fontSize: "16px" }}>{email}</strong><br />
+                    on <strong style={{ color: "#1f2937", fontSize: "16px" }}>{catalog}.{schema}.{table}</strong>?
+                </>
+            ),
+            onConfirm: async () => {
+                setConfirmModal(null);
+                setLP(true);
+                try {
+                    const res = await api.post("/admin/revoke-access", { user: email, catalog, schema, table });
+                    if (res.data.success) {
+                        showToast("Access revoked successfully");
+                        loadPolicies();
+                    }
+                } catch (err) {
+                    showToast(err.response?.data?.error || "Failed to revoke access", "error");
+                } finally { setLP(false); }
+            }
+        });
     };
 
     const inputStyle = {
@@ -140,6 +233,7 @@ function GrantAccessTab() {
     return (
         <>
             <Toast toast={toast} />
+            <ConfirmModal isOpen={!!confirmModal} {...confirmModal} onCancel={() => setConfirmModal(null)} isDestructive={true} confirmText="Revoke Access" />
 
             {/* Form */}
             <div style={{
@@ -152,10 +246,13 @@ function GrantAccessTab() {
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
                     <div style={{ gridColumn: "1 / -1" }}>
-                        <label style={labelStyle}>User Email</label>
+                        <label style={labelStyle}>User Email {loadingUsers && <span style={{ color: "#9ca3af" }}> Loading suggestions...</span>}</label>
                         <input type="email" placeholder="user@company.com" value={form.user}
                             onChange={e => setForm({ ...form, user: e.target.value })} disabled={submitting}
-                            style={inputStyle} />
+                            style={inputStyle} list="user-suggestions" />
+                        <datalist id="user-suggestions">
+                            {availableUsers.map(u => <option key={u} value={u} />)}
+                        </datalist>
                     </div>
 
                     <div>
@@ -240,7 +337,7 @@ function GrantAccessTab() {
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
                             <thead>
                                 <tr>
-                                    {["User", "Catalog", "Schema", "Table", "Privilege", "Status", "Created"].map(h => (
+                                    {["User", "Catalog", "Schema", "Table", "Privilege", "Source", "Granted At", "Actions"].map(h => (
                                         <th key={h} style={{ padding: "12px 16px", textAlign: "left", color: "#64748b", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>{h}</th>
                                     ))}
                                 </tr>
@@ -248,23 +345,35 @@ function GrantAccessTab() {
                             <tbody>
                                 {policies.map((p, i) => (
                                     <tr key={i} style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" }} onMouseEnter={e => e.currentTarget.style.background = "#f8fafc"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                                        <td style={{ padding: "14px 16px", color: "#1e293b", fontWeight: 600 }}>{p[1]}</td>
-                                        <td style={{ padding: "14px 16px" }}><code style={{ background: "#f1f5f9", padding: "3px 8px", borderRadius: "6px", fontSize: "12px", color: "#475569" }}>{p[3]}</code></td>
-                                        <td style={{ padding: "14px 16px" }}><code style={{ background: "#f1f5f9", padding: "3px 8px", borderRadius: "6px", fontSize: "12px", color: "#475569" }}>{p[4]}</code></td>
-                                        <td style={{ padding: "14px 16px" }}><code style={{ background: "#f1f5f9", padding: "3px 8px", borderRadius: "6px", fontSize: "12px", color: "#475569" }}>{p[5]}</code></td>
+                                        <td style={{ padding: "14px 16px", color: "#1e293b", fontWeight: 600 }}>{p.user_email}</td>
+                                        <td style={{ padding: "14px 16px" }}><code style={{ background: "#f1f5f9", padding: "3px 8px", borderRadius: "6px", fontSize: "12px", color: "#475569" }}>{p.catalog_name}</code></td>
+                                        <td style={{ padding: "14px 16px" }}><code style={{ background: "#f1f5f9", padding: "3px 8px", borderRadius: "6px", fontSize: "12px", color: "#475569" }}>{p.schema_name}</code></td>
+                                        <td style={{ padding: "14px 16px" }}><code style={{ background: "#f1f5f9", padding: "3px 8px", borderRadius: "6px", fontSize: "12px", color: "#475569" }}>{p.table_name}</code></td>
                                         <td style={{ padding: "14px 16px" }}>
-                                            <span style={{ display: "inline-block", background: "#dbeafe", color: "#1d4ed8", padding: "2px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 600 }}>{p[6]}</span>
+                                            <span style={{ display: "inline-block", background: "#dbeafe", color: "#1d4ed8", padding: "2px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 600 }}>{p.privilege}</span>
                                         </td>
                                         <td style={{ padding: "14px 16px" }}>
                                             <span style={{
                                                 display: "inline-flex", alignItems: "center", gap: "5px", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 700,
-                                                background: p[7] === "ACTIVE" ? "#dcfce7" : "#f1f5f9", color: p[7] === "ACTIVE" ? "#15803d" : "#64748b",
+                                                background: p.source === "portal" ? "#ede9fe" : "#fff7ed",
+                                                color: p.source === "portal" ? "#6d28d9" : "#c2410c",
                                             }}>
-                                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: p[7] === "ACTIVE" ? "#22c55e" : "#9ca3af" }} />
-                                                {p[7] === "ACTIVE" ? "Granted" : "Pending"}
+                                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: p.source === "portal" ? "#7c3aed" : "#f97316" }} />
+                                                {p.source === "portal" ? "Portal" : "Manual"}
                                             </span>
                                         </td>
-                                        <td style={{ padding: "14px 16px", color: "#64748b", whiteSpace: "nowrap" }}>{fmtTs(p[8])}</td>
+                                        <td style={{ padding: "14px 16px", color: "#64748b", fontSize: "12px", whiteSpace: "nowrap" }}>
+                                            {p.created_at ? fmtTs(p.created_at) : <span style={{ color: "#cbd5e1" }}>—</span>}
+                                        </td>
+                                        <td style={{ padding: "14px 16px" }}>
+                                            <button
+                                                onClick={() => revoke(p.user_email, p.catalog_name, p.schema_name, p.table_name)}
+                                                disabled={loadingPolicies}
+                                                style={{ padding: "4px 10px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: "6px", cursor: "pointer", fontSize: "11px", fontWeight: 700 }}
+                                            >
+                                                Revoke
+                                            </button>
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -286,6 +395,10 @@ function RLACTab() {
     const [toast, setToast] = useState(null);
     const [search, setSearch] = useState("");
 
+    // Autocomplete state
+    const [availableUsers, setAvailableUsers] = useState([]);
+    const [availableGroups, setAvailableGroups] = useState([]);
+
     const showToast = (message, type = "success") => {
         setToast({ message, type });
         setTimeout(() => setToast(null), 4000);
@@ -301,7 +414,23 @@ function RLACTab() {
         } finally { setLoading(false); }
     };
 
-    useEffect(() => { load(); }, []); // eslint-disable-line
+    const loadSuggestions = async () => {
+        try {
+            const [usersRes, groupsRes] = await Promise.all([
+                api.get("/admin/users-list", { headers: adminHeaders() }).catch(() => ({ data: { users: [] } })),
+                api.get("/admin/groups-list", { headers: adminHeaders() }).catch(() => ({ data: { groups: [] } }))
+            ]);
+            setAvailableUsers(usersRes.data?.users || []);
+            setAvailableGroups(groupsRes.data?.groups || []);
+        } catch (e) {
+            // silent fail for suggestions
+        }
+    };
+
+    useEffect(() => {
+        load();
+        loadSuggestions();
+    }, []); // eslint-disable-line
 
     const save = async () => {
         if (!form.principalName) { showToast("Principal Name is required", "error"); return; }
@@ -316,15 +445,28 @@ function RLACTab() {
         } finally { setSaving(false); }
     };
 
-    const del = async (row) => {
-        if (!window.confirm(`Delete policy for ${row[1]}?`)) return; // eslint-disable-line
-        try {
-            await api.delete("/access/rlac-policies", { headers: adminHeaders(), data: { principalType: row[0], principalName: row[1] } });
-            showToast("Policy deleted");
-            load();
-        } catch (err) {
-            showToast(err.response?.data?.error || "Failed to delete", "error");
-        }
+    const [confirmModal, setConfirmModal] = useState(null);
+
+    const del = (row) => {
+        setConfirmModal({
+            title: "Delete Policy",
+            message: (
+                <>
+                    Are you sure you want to delete the RLAC policy for<br />
+                    <strong style={{ color: "#1f2937", fontSize: "16px" }}>{row[1]}</strong>?
+                </>
+            ),
+            onConfirm: async () => {
+                setConfirmModal(null);
+                try {
+                    await api.delete("/access/rlac-policies", { headers: adminHeaders(), data: { principalType: row[0], principalName: row[1] } });
+                    showToast("Policy deleted");
+                    load();
+                } catch (err) {
+                    showToast(err.response?.data?.error || "Failed to delete", "error");
+                }
+            }
+        });
     };
 
     const edit = (row) => {
@@ -354,6 +496,7 @@ function RLACTab() {
     return (
         <>
             <Toast toast={toast} />
+            <ConfirmModal isOpen={!!confirmModal} {...confirmModal} onCancel={() => setConfirmModal(null)} isDestructive={true} confirmText="Delete Policy" />
             <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "24px", marginTop: 24, alignItems: "start" }}>
 
                 {/* Add / Edit Form */}
@@ -371,7 +514,13 @@ function RLACTab() {
                         </div>
                         <div>
                             <label style={labelStyle}>Principal Name *</label>
-                            <input style={inputStyle} placeholder="user@email.com or group-name" value={form.principalName} onChange={e => setForm({ ...form, principalName: e.target.value })} />
+                            <input style={inputStyle} placeholder="user@email.com or group-name" value={form.principalName} onChange={e => setForm({ ...form, principalName: e.target.value })} list="rlac-principal-suggestions" />
+                            <datalist id="rlac-principal-suggestions">
+                                {form.principalType === "USER"
+                                    ? availableUsers.map(u => <option key={u} value={u} />)
+                                    : availableGroups.map(g => <option key={g} value={g} />)
+                                }
+                            </datalist>
                         </div>
                         {[["groupcode", "Group Code"], ["clustercode", "Cluster Code"], ["companycode", "Company Code"], ["plantcode", "Plant Code"]].map(([key, label]) => (
                             <div key={key}>

@@ -109,30 +109,20 @@ const Icons = {
   ),
 };
 
-// ── Admin / Customer nav configs ─────────────────────────────────────────────
 const ADMIN_NAV = [
-  { to: "/approvals", icon: "approve", label: "Approve Requests" },
   { to: "/assign-access", icon: "key", label: "Assign Access" },
   { to: "/policies", icon: "shield", label: "Manage Policies" },
   { to: "/users", icon: "users", label: "Manage Users" },
   { to: "/register", icon: "userPlus", label: "Register User" },
   { to: "/audit", icon: "audit", label: "Audit Logs" },
 ];
-const CUSTOMER_NAV = [
-  { to: "/request", icon: "request", label: "Request Access" },
-  { to: "/myrequests", icon: "myRequests", label: "My Data" },
-];
+
 const ADMIN_ACTIONS = [
-  { to: "/approvals", icon: "approve", label: "Approve Requests", accent: "#10b981" },
   { to: "/assign-access", icon: "key", label: "Assign Access", accent: "#3b82f6" },
   { to: "/policies", icon: "shield", label: "Manage Policies", accent: "#8b5cf6" },
   { to: "/users", icon: "users", label: "Manage Users", accent: "#f59e0b" },
   { to: "/register", icon: "userPlus", label: "Register User", accent: "#06b6d4" },
   { to: "/audit", icon: "audit", label: "Audit Logs", accent: "#ef4444" },
-];
-const CUSTOMER_ACTIONS = [
-  { to: "/request", icon: "request", label: "Request Access", accent: "#3b82f6" },
-  { to: "/myrequests", icon: "myRequests", label: "My Data", accent: "#10b981" },
 ];
 
 // ── Sidebar link ─────────────────────────────────────────────────────────────
@@ -217,38 +207,13 @@ function ActionCard({ to, iconKey, label, accent }) {
 // ── Main Dashboard ───────────────────────────────────────────────────────────
 function Dashboard() {
   const navigate = useNavigate();
-  const role = localStorage.getItem("role");
   const user = localStorage.getItem("user");
-  const department = localStorage.getItem("department");
-
-  const [accessLinks, setAccessLinks] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (user) {
-      loadAccessLinks();
-    } else {
-      setLoading(false); // user not in localStorage — don't hang forever
-    }
-  }, []); // eslint-disable-line
-
-  const loadAccessLinks = async () => {
-    try {
-      const res = await api.get(`/access/my-access/${user}`);
-      if (res.data.result?.data_array) {
-        setAccessLinks(res.data.result.data_array);
-      }
-    } catch (e) {
-      console.log("Error loading access links:", e);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const role = localStorage.getItem("role");
 
   const logout = () => { localStorage.clear(); navigate("/"); };
 
-  const nav = role === "admin" ? ADMIN_NAV : CUSTOMER_NAV;
-  const actions = role === "admin" ? ADMIN_ACTIONS : CUSTOMER_ACTIONS;
+  const nav = ADMIN_NAV;
+  const actions = ADMIN_ACTIONS;
   const today = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
   return (
@@ -396,10 +361,9 @@ function Dashboard() {
 
         {/* Stat Cards */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px", marginBottom: "32px" }}>
-          <StatCard iconKey="email" label="Email" value={user} accent="#3b82f6" />
-          <StatCard iconKey="role" label="Role" value={role?.charAt(0).toUpperCase() + role?.slice(1)} accent={role === "admin" ? "#ef4444" : "#10b981"} />
-          {department && <StatCard iconKey="department" label="Department" value={department} accent="#8b5cf6" />}
-          <StatCard iconKey="database" label="Data Access" value={loading ? "Loading..." : `${accessLinks.length} table${accessLinks.length !== 1 ? "s" : ""}`} accent="#f59e0b" />
+          <StatCard iconKey="email" label="Admin Email" value={user} accent="#3b82f6" />
+          <StatCard iconKey="role" label="System Role" value="Administrator" accent="#ef4444" />
+          <StatCard iconKey="audit" label="System Status" value="Online" accent="#10b981" />
         </div>
 
         {/* Quick Actions */}
@@ -419,90 +383,20 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* My Data Access */}
+        {/* Portal Summary */}
         <div style={{
           background: "#fff", borderRadius: "18px", padding: "28px",
           boxShadow: "0 1px 12px rgba(0,0,0,0.05)", border: "1px solid #f1f5f9",
         }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "22px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <div style={{ width: "3px", height: "18px", background: "#10b981", borderRadius: "2px" }} />
-              <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>My Data Access</h3>
-            </div>
-            {!loading && accessLinks.length > 0 && (
-              <span style={{ fontSize: "12px", fontWeight: 600, color: "#94a3b8" }}>
-                {accessLinks.length} grant{accessLinks.length !== 1 ? "s" : ""}
-              </span>
-            )}
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "15px" }}>
+            <div style={{ width: "3px", height: "18px", background: "#10b981", borderRadius: "2px" }} />
+            <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>Portal Overview</h3>
           </div>
-
-          {loading ? (
-            <div style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>
-              <div style={{
-                width: "28px", height: "28px", border: "3px solid #e5e7eb",
-                borderTopColor: "#3b82f6", borderRadius: "50%",
-                animation: "spin 0.8s linear infinite", margin: "0 auto 12px",
-              }} />
-              <div style={{ fontSize: "13px" }}>Loading your access...</div>
-            </div>
-
-          ) : accessLinks.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "48px 24px" }}>
-              <div style={{ marginBottom: "16px", opacity: 0.4 }}>{Icons.lock}</div>
-              <div style={{ fontWeight: 700, fontSize: "15px", color: "#374151", marginBottom: "6px" }}>No access granted yet</div>
-              <div style={{ fontSize: "13px", color: "#9ca3af" }}>
-                {role === "customer"
-                  ? "Request access from an admin to get started."
-                  : "Assign access to users from the Assign Access page."}
-              </div>
-            </div>
-
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {accessLinks.map((link, i) => {
-                const [catalog, schema, table, privilege = "SELECT"] = link;
-                const url = `https://dbc-6c5e2a27-b2cf.cloud.databricks.com/explore/data/${catalog}/${schema}/${table}`;
-                return (
-                  <div key={i} style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    padding: "15px 20px", background: "#f8fafc",
-                    borderRadius: "12px", border: "1px solid #e2e8f0",
-                    borderLeft: "4px solid #3b82f6",
-                  }}>
-                    <div>
-                      <div style={{ fontFamily: "monospace", fontWeight: 600, color: "#1e293b", fontSize: "13.5px" }}>
-                        {catalog}.{schema}.{table}
-                      </div>
-                      <span style={{
-                        display: "inline-block", marginTop: "5px",
-                        fontSize: "11px", fontWeight: 700, padding: "2px 10px",
-                        background: "#dbeafe", color: "#1d4ed8", borderRadius: "20px",
-                      }}>
-                        {privilege}
-                      </span>
-                    </div>
-                    <a
-                      href={url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        display: "flex", alignItems: "center", gap: "6px",
-                        padding: "7px 16px",
-                        background: "linear-gradient(135deg, #1e3a5f, #0f172a)",
-                        color: "white", borderRadius: "9px", textDecoration: "none",
-                        fontWeight: 600, fontSize: "12.5px", transition: "opacity 0.2s",
-                        whiteSpace: "nowrap",
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.opacity = "0.82"}
-                      onMouseLeave={e => e.currentTarget.style.opacity = "1"}
-                    >
-                      Open {Icons.externalLink}
-                    </a>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <p style={{ fontSize: "14px", color: "#64748b", lineHeight: "1.6" }}>
+            Welcome to the Databricks Governance Portal. As an administrator, you have direct control over data access policies. 
+            Use the actions above to grant or revoke select permissions on tables, manage users, and review the system audit logs. 
+            All changes are executed in real-time on the Databricks SQL Warehouse.
+          </p>
         </div>
       </main>
     </div>
