@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import "../App.css";
+import { useToast } from "../components/Toast";
 
 function MyRequests() {
   const navigate = useNavigate();
@@ -11,16 +12,12 @@ function MyRequests() {
   const [displayData, setDisplayData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [tableLoading, setTableLoading] = useState("");
-  const [toast, setToast] = useState(null);
+  const { showToast, ToastComponent } = useToast();
 
   useEffect(() => {
     loadTables();
   }, []);
 
-  const showToast = (message, type = "success") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
-  };
 
   const loadTables = async () => {
     try {
@@ -42,7 +39,7 @@ function MyRequests() {
     } catch (error) {
       console.error("❌ Tables error:", error);
       setTables([]);
-      showToast("Failed to load tables", "error");
+      showToast(error.response?.data?.error || "Failed to load tables", "error");
     } finally {
       setLoading(false);
     }
@@ -80,7 +77,7 @@ function MyRequests() {
     } catch (error) {
       console.error("❌ Data error:", error);
       setDisplayData([]);
-      showToast("Failed to load data", "error");
+      showToast(error.response?.data?.error || "Failed to load data", "error");
     } finally {
       setTableLoading("");
     }
@@ -88,12 +85,7 @@ function MyRequests() {
 
   return (
     <div className="myrequests-container-white">
-      {/* Toast */}
-      {toast && (
-        <div className={`inline-toast-white toast-${toast.type}`}>
-          {toast.message}
-        </div>
-      )}
+      {ToastComponent}
 
       {/* Header */}
       <div className="page-header-white">
@@ -113,7 +105,11 @@ function MyRequests() {
         </div>
       ) : tables.length === 0 ? (
         <div className="empty-state-white">
-          <div className="empty-icon">—</div>
+          <div style={{ marginBottom: "20px", color: "#cbd5e1" }}>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" /><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+            </svg>
+          </div>
           <h3>No Tables Available</h3>
           <p>You don't have access to any tables yet.</p>
           <button className="primary-btn-white" onClick={loadTables}>

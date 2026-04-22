@@ -3,12 +3,13 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import "../App.css";
+import { useToast } from "../components/Toast";
 
 function DataAccess() {
   const navigate = useNavigate();
   const [dataAccess, setDataAccess] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [toast, setToast] = useState(null);
+  const { showToast, ToastComponent } = useToast();
 
   const user = localStorage.getItem("user");
   const department = localStorage.getItem("department");
@@ -27,16 +28,12 @@ function DataAccess() {
       }
     } catch (error) {
       console.log("Error loading access:", error);
-      showToast("Failed to load data access", "error");
+      showToast(error.response?.data?.error || "Failed to load data access", "error");
     } finally {
       setLoading(false);
     }
   };
 
-  const showToast = (message, type = "success") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
 
   const openTable = (catalog, schema, table) => {
     const url = `https://dbc-6c5e2a27-b2cf.cloud.databricks.com/explore/data/${catalog}/${schema}/${table}`;
@@ -46,12 +43,7 @@ function DataAccess() {
 
   return (
     <div className="dataaccess-container-white">
-      {/* Inline Toast */}
-      {toast && (
-        <div className={`inline-toast-white toast-${toast.type}`}>
-          {toast.message}
-        </div>
-      )}
+      {ToastComponent}
 
       {/* Header with Back button */}
       <div className="page-header-white">
@@ -97,7 +89,11 @@ function DataAccess() {
         </div>
       ) : dataAccess.length === 0 ? (
         <div className="empty-state-white">
-          <div className="empty-icon">—</div>
+          <div style={{ marginBottom: "20px", color: "#cbd5e1" }}>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" /><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+            </svg>
+          </div>
           <h3>No Data Access</h3>
           <p>No data access granted yet. Request access from admin.</p>
         </div>

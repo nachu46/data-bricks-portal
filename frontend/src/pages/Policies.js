@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
+import { useToast } from "../components/Toast";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 const adminHeaders = () => ({
@@ -31,7 +32,7 @@ function DRow({ label, children }) {
 // ─── Execute Access Modal ─────────────────────────────────────────────────────
 // p[0]=policy_id  p[1]=user_email  p[2]=department  p[3]=catalog
 // p[4]=schema     p[5]=table       p[6]=privileges   p[7]=status  p[8]=created_time
-function ExecModal({ p, onClose, onDone }) {
+function ExecModal({ p, onClose, onDone, onFail }) {
   const [grants, setGrants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
@@ -52,9 +53,15 @@ function ExecModal({ p, onClose, onDone }) {
         schema_name: p[4], table_name: p[5], privileges: p[6],
       }, { headers: adminHeaders() });
       if (r.data?.success) { onDone(); onClose(); }
-      else setErr(r.data?.error || "Execution failed");
+      else {
+        const msg = r.data?.error || "Execution failed";
+        setErr(msg);
+        if (onFail) onFail(msg);
+      }
     } catch (e) {
-      setErr(e.response?.data?.error || "Execution failed");
+      const msg = e.response?.data?.error || "Execution failed";
+      setErr(msg);
+      if (onFail) onFail(msg);
     } finally { setRunning(false); }
   };
 
@@ -64,7 +71,11 @@ function ExecModal({ p, onClose, onDone }) {
 
         {/* header */}
         <div style={{ padding: "1.25rem 1.5rem", background: "linear-gradient(135deg,#0f172a,#1e3a5f)", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <div style={{ width: 38, height: 38, borderRadius: 10, background: "rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem" }}>⚡</div>
+          <div style={{ width: 38, height: 38, borderRadius: 10, background: "rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
+          </div>
           <div style={{ flex: 1 }}>
             <div style={{ color: "#fff", fontWeight: 700, fontSize: "1rem" }}>Execute Access</div>
             <div style={{ color: "rgba(255,255,255,0.55)", fontSize: "0.78rem" }}>Grant Databricks privileges</div>
@@ -250,23 +261,18 @@ export default function Policies() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState({});
-  const [toast, setToast] = useState(null);
+  const { showToast, ToastComponent } = useToast();
   const [modal, setModal] = useState(null);
   const [grantsModal, setGrantsModal] = useState(null);
-
-  const toast$ = (msg, type = "ok") => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 4000);
-  };
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const r = await api.get("/access/policies-all", { headers: adminHeaders() });
       setRows(r.data?.result?.data_array || []);
-    } catch { toast$("Failed to load policies", "err"); }
+    } catch { showToast("Failed to load policies", "error"); }
     finally { setLoading(false); }
-  }, []);
+  }, [showToast]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -274,9 +280,9 @@ export default function Policies() {
     setBusy(b => ({ ...b, [i]: "del" }));
     try {
       await api.post("/access/delete-policy", { email, schema, table }, { headers: adminHeaders() });
-      toast$(`Deleted policy for ${email}`);
+      showToast(`Deleted policy for ${email}`, "success");
       load();
-    } catch { toast$("Failed to delete", "err"); }
+    } catch { showToast("Failed to delete", "error"); }
     finally { setBusy(b => ({ ...b, [i]: null })); }
   };
 
@@ -284,9 +290,9 @@ export default function Policies() {
     setBusy(b => ({ ...b, [i]: "tog" }));
     try {
       await api.post("/access/toggle-policy", { email, schema, table, active: !isActive }, { headers: adminHeaders() });
-      toast$(`${!isActive ? "Activated" : "Deactivated"} policy for ${email}`);
+      showToast(`${!isActive ? "Activated" : "Deactivated"} policy for ${email}`, "success");
       load();
-    } catch { toast$("Failed to toggle", "err"); }
+    } catch { showToast("Failed to toggle", "error"); }
     finally { setBusy(b => ({ ...b, [i]: null })); }
   };
 
@@ -301,23 +307,11 @@ export default function Policies() {
         @keyframes fadeIn { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:none; } }
       `}</style>
 
-      {/* Inline Toast */}
-      {toast && (
-        <div style={{
-          position: "fixed", top: 20, right: 20, zIndex: 1100,
-          padding: "12px 20px", borderRadius: "12px", fontWeight: 600, fontSize: "13.5px",
-          background: toast.type === "err" ? "#fef2f2" : "#f0fdf4",
-          color: toast.type === "err" ? "#dc2626" : "#15803d",
-          border: `1px solid ${toast.type === "err" ? "#fca5a5" : "#bbf7d0"}`,
-          boxShadow: "0 8px 24px rgba(0,0,0,0.08)", animation: "fadeIn 0.25s ease"
-        }}>
-          {toast.type === "err" ? "❌ " : "✅ "}{toast.msg}
-        </div>
-      )}
-
       {/* Modals */}
-      {modal && <ExecModal p={modal} onClose={() => setModal(null)} onDone={() => { toast$("Access granted successfully"); load(); }} />}
+      {modal && <ExecModal p={modal} onClose={() => setModal(null)} onDone={() => { showToast("Access granted successfully", "success"); load(); }} onFail={(msg) => showToast(msg, "error")} />}
       {grantsModal && <GrantsModal p={grantsModal} onClose={() => setGrantsModal(null)} />}
+
+      {ToastComponent}
 
       {/* Header with Back button */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "36px" }}>
@@ -379,7 +373,11 @@ export default function Policies() {
           </div>
         ) : rows.length === 0 ? (
           <div style={{ textAlign: "center", padding: "48px 24px" }}>
-            <div style={{ fontSize: "24px", color: "#cbd5e1", marginBottom: "16px" }}>🛡️</div>
+            <div style={{ marginBottom: "16px", color: "#cbd5e1" }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+            </div>
             <div style={{ fontWeight: 700, fontSize: "15px", color: "#374151", marginBottom: "6px" }}>No Policies Found</div>
             <div style={{ fontSize: "13px", color: "#9ca3af" }}>No access policies have been configured yet</div>
           </div>

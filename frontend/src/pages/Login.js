@@ -2,12 +2,14 @@
 import React, { useState } from "react";
 import api from "../services/api";
 import "../App.css";
+import { useToast } from "../components/Toast";
 
 function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const { showToast, ToastComponent } = useToast();
 
   const login = async () => {
     try {
@@ -24,9 +26,12 @@ function Login() {
         window.location.href = "/dashboard";
       } else {
         setError("Invalid email or password");
+        showToast("Invalid credentials", "error");
       }
     } catch (error) {
-      setError(error.response?.data?.error || "Login failed. Please check your credentials.");
+      const msg = error.response?.data?.error || "Login failed. Please check your credentials.";
+      setError(msg);
+      showToast(msg, "error");
       console.log(error);
     } finally {
       setLoading(false);
@@ -40,6 +45,7 @@ function Login() {
 
   return (
     <div className="login-container">
+      {ToastComponent}
       <div className="login-card">
 
         {/* Logo */}

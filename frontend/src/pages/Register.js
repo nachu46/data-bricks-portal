@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import "../App.css";
+import { useToast } from "../components/Toast";
 
 function Register() {
   const navigate = useNavigate();
@@ -11,7 +12,7 @@ function Register() {
   const [role, setRole] = useState("customer");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [toast, setToast] = useState(null);
+  const { showToast, ToastComponent } = useToast();
 
   const createUser = async () => {
     try {
@@ -33,21 +34,16 @@ function Register() {
         setTimeout(() => {
           window.location.href = "/dashboard";
         }, 1500);
-      } else {
-        setError("Error creating user");
       }
     } catch (error) {
       setError("Error creating user");
+      showToast(error.response?.data?.error || "Error creating user", "error");
       console.error("Registration error:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const showToast = (message, type = "success") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -60,20 +56,19 @@ function Register() {
 
   return (
     <div className="register-container-white">
-      {/* Inline Toast */}
-      {toast && (
-        <div className={`inline-toast-white toast-${toast.type}`}>
-          {toast.message}
-        </div>
-      )}
+      {ToastComponent}
 
       <div className="register-card-white">
         {/* Back Button */}
         <button
           className="back-btn-white floating"
           onClick={() => navigate(-1)}
+          style={{ display: "flex", alignItems: "center", gap: "6px" }}
         >
-          ← Back
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
+          </svg>
+          Back
         </button>
 
         {/* Header */}

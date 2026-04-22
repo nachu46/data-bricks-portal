@@ -1,8 +1,8 @@
-// RequestAccess.jsx - COMPACT DUAL-CARD DESIGN ✅
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import "../App.css";
+import { useToast } from "../components/Toast";
 
 function RequestAccess() {
   const navigate = useNavigate();
@@ -25,16 +25,12 @@ function RequestAccess() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
-  const [toast, setToast] = useState(null);
+  const { showToast, ToastComponent } = useToast();
 
   useEffect(() => {
     loadEverything();
   }, []);
 
-  const showToast = (message, type = "success") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
 
   const loadEverything = async () => {
     setLoading(true);
@@ -83,7 +79,7 @@ function RequestAccess() {
       setForm({ user, catalog: "", schema: "", table: "", access: "SELECT" });
       loadEverything();
     } catch (error) {
-      showToast("Failed to submit request", "error");
+      showToast(error.response?.data?.error || "Failed to submit request", "error");
       console.error("Submit error:", error);
     } finally {
       setFormLoading(false);
@@ -94,20 +90,19 @@ function RequestAccess() {
 
   return (
     <div className="request-compact-container">
-      {/* Toast */}
-      {toast && (
-        <div className={`request-toast toast-${toast.type}`}>
-          {toast.message}
-        </div>
-      )}
+      {ToastComponent}
 
       {/* Header */}
       <div className="request-compact-header">
         <button
           className="back-btn-compact"
           onClick={() => navigate(-1)}
+          style={{ display: "flex", alignItems: "center", gap: "6px" }}
         >
-          ← Back
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
+          </svg>
+          Back
         </button>
         <div>
           <h1>Request Access</h1>
@@ -119,8 +114,11 @@ function RequestAccess() {
           className="refresh-btn-compact"
           onClick={loadEverything}
           disabled={loading}
+          style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
         >
-          {loading ? "🔄" : "⟳"}
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: loading ? "spin 1s linear infinite" : "none" }}>
+            <path d="M23 4v6h-6" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+          </svg>
         </button>
       </div>
 

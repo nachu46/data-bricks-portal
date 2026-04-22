@@ -3,6 +3,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import "../App.css";
+import { useToast } from "../components/Toast";
+import ConfirmModal from "../components/ConfirmModal";
 
 const adminHeaders = () => ({
     role: localStorage.getItem("role"),
@@ -24,76 +26,9 @@ const fmtTs = (ts) => {
     try { return new Date(ts).toLocaleString(); } catch { return ts; }
 };
 
-// ─── Toast ─────────────────────────────────────────────────────────────────────
-function Toast({ toast }) {
-    if (!toast) return null;
-    const cfg = {
-        success: { bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0", icon: "✅" },
-        warning: { bg: "#fffbeb", color: "#92400e", border: "#fde68a", icon: "⚠️" },
-        error: { bg: "#fef2f2", color: "#dc2626", border: "#fca5a5", icon: "❌" },
-    }[toast.type] || { bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0", icon: "✅" };
-    return (
-        <div style={{
-            position: "fixed", top: 20, right: 20, zIndex: 2000,
-            padding: "12px 20px", borderRadius: "12px", fontWeight: 600, fontSize: "13.5px",
-            background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.08)", animation: "fadeIn 0.25s ease"
-        }}>
-            {cfg.icon} {toast.message}
-        </div>
-    );
-}
-
-// ─── Confirm Modal ─────────────────────────────────────────────────────────────
-function ConfirmModal({ isOpen, title, message, onConfirm, onCancel, confirmText = "Confirm", isDestructive = false }) {
-    if (!isOpen) return null;
-    const color = isDestructive ? "#ef4444" : "#10b981";
-    const bgLight = isDestructive ? "#fef2f2" : "#f0fdf4";
-    return (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(100,116,139,0.3)", backdropFilter: "blur(4px)", zIndex: 3000, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }} onClick={onCancel}>
-            <div style={{ background: "#fff", borderRadius: 20, width: "100%", maxWidth: 440, boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)", overflow: "hidden", animation: "fadeIn 0.2s ease", padding: "36px 32px 24px", display: "flex", flexDirection: "column", alignItems: "center", position: "relative" }} onClick={e => e.stopPropagation()}>
-
-                {/* Shield Icon */}
-                <div style={{ width: 56, height: 56, borderRadius: "50%", background: bgLight, color: color, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 24, boxShadow: `0 0 0 8px ${bgLight}` }}>
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                        <line x1="12" y1="8" x2="12" y2="12" />
-                        <line x1="12" y1="16" x2="12.01" y2="16" />
-                    </svg>
-                </div>
-
-                {/* Title */}
-                <h2 style={{ margin: 0, fontSize: "24px", fontWeight: 700, color: "#1f2937", textAlign: "center", fontFamily: "inherit" }}>{title}</h2>
-
-                {/* Divider Line */}
-                <div style={{ width: 40, height: 3, background: color, margin: "16px 0", borderRadius: 2 }} />
-
-                {/* Message Body */}
-                <div style={{ width: "100%", textAlign: "center", color: "#4b5563", fontSize: "15px", lineHeight: "1.6", marginBottom: 32 }}>
-                    {message}
-                </div>
-
-                {/* Footer Buttons */}
-                <div style={{ width: "100%", display: "flex", gap: "12px", borderTop: "1px solid #f3f4f6", paddingTop: "24px", justifyContent: "center" }}>
-                    <button onClick={onCancel} style={{ flex: 1, padding: "12px", background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 10, fontWeight: 600, fontSize: "14px", cursor: "pointer", transition: "all 0.2s", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        Cancel
-                    </button>
-                    <button onClick={onConfirm} style={{ flex: 1, padding: "12px", background: color, color: "#fff", border: "none", borderRadius: 10, fontWeight: 600, fontSize: "14px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: `0 4px 14px ${isDestructive ? "rgba(239, 68, 68, 0.4)" : "rgba(16, 185, 129, 0.4)"}`, transition: "all 0.2s" }}>
-                        {confirmText}
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                            <line x1="12" y1="8" x2="12" y2="12" />
-                            <line x1="12" y1="16" x2="12.01" y2="16" />
-                        </svg>
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-}
 
 // ─── TAB 1: Grant Access ───────────────────────────────────────────────────────
-function GrantAccessTab() {
+function GrantAccessTab({ showToast }) {
     const [catalogs, setCatalogs] = useState([]);
     const [schemas, setSchemas] = useState([]);
     const [tables, setTables] = useState([]);
@@ -106,12 +41,6 @@ function GrantAccessTab() {
     const [availableUsers, setAvailableUsers] = useState([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
     const [form, setForm] = useState({ user: "", catalog: "", schema: "", table: "", privilege: "SELECT" });
-    const [toast, setToast] = useState(null);
-
-    const showToast = (message, type = "success") => {
-        setToast({ message, type });
-        setTimeout(() => setToast(null), 4000);
-    };
 
     // Load catalogs and available users on mount
     useEffect(() => {
@@ -232,7 +161,6 @@ function GrantAccessTab() {
 
     return (
         <>
-            <Toast toast={toast} />
             <ConfirmModal isOpen={!!confirmModal} {...confirmModal} onCancel={() => setConfirmModal(null)} isDestructive={true} confirmText="Revoke Access" />
 
             {/* Form */}
@@ -386,23 +314,15 @@ function GrantAccessTab() {
 }
 
 // ─── TAB 2: Row-Level Access Control ──────────────────────────────────────────
-function RLACTab() {
+function RLACTab({ showToast }) {
     const [policies, setPolicies] = useState([]);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState(EMPTY_RLAC);
     const [editMode, setEditMode] = useState(false);
-    const [toast, setToast] = useState(null);
     const [search, setSearch] = useState("");
-
-    // Autocomplete state
     const [availableUsers, setAvailableUsers] = useState([]);
     const [availableGroups, setAvailableGroups] = useState([]);
-
-    const showToast = (message, type = "success") => {
-        setToast({ message, type });
-        setTimeout(() => setToast(null), 4000);
-    };
 
     const load = async () => {
         setLoading(true);
@@ -495,7 +415,6 @@ function RLACTab() {
 
     return (
         <>
-            <Toast toast={toast} />
             <ConfirmModal isOpen={!!confirmModal} {...confirmModal} onCancel={() => setConfirmModal(null)} isDestructive={true} confirmText="Delete Policy" />
             <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "24px", marginTop: 24, alignItems: "start" }}>
 
@@ -614,6 +533,7 @@ function RLACTab() {
 function AdminAssignAccess() {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState("grant");
+    const { showToast, ToastComponent } = useToast();
 
     return (
         <div style={{ minHeight: "100vh", background: "#f8fafc", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", padding: "40px 44px" }}>
@@ -623,6 +543,8 @@ function AdminAssignAccess() {
                 @keyframes spin { to { transform: rotate(360deg); } }
                 @keyframes fadeIn { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:none; } }
             `}</style>
+
+            {ToastComponent}
 
             {/* Header */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "36px" }}>
@@ -659,8 +581,8 @@ function AdminAssignAccess() {
             </div>
 
             <div style={{ animation: "fadeIn 0.3s ease" }}>
-                {activeTab === "grant" && <GrantAccessTab />}
-                {activeTab === "rlac" && <RLACTab />}
+                {activeTab === "grant" && <GrantAccessTab showToast={showToast} />}
+                {activeTab === "rlac" && <RLACTab showToast={showToast} />}
             </div>
         </div>
     );

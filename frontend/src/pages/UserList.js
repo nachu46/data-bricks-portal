@@ -1,27 +1,9 @@
-// UsersList.jsx - NEW COMPACT DESIGN ✅
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import "../App.css";
-
-// Shared ConfirmModal
-function ConfirmModal({ isOpen, title, message, onConfirm, onCancel, confirmText = "Confirm" }) {
-    if (!isOpen) return null;
-    return (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(100,116,139,0.3)", backdropFilter: "blur(4px)", zIndex: 3000, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }} onClick={onCancel}>
-            <div style={{ background: "#fff", borderRadius: 20, width: "100%", maxWidth: 420, boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)", padding: "36px 32px 24px", display: "flex", flexDirection: "column", alignItems: "center", animation: "fadeIn 0.2s ease" }} onClick={e => e.stopPropagation()}>
-                <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#fef2f2", color: "#ef4444", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20, boxShadow: "0 0 0 8px #fef2f2", fontSize: 22 }}>🗑️</div>
-                <h2 style={{ margin: 0, fontSize: "22px", fontWeight: 700, color: "#1f2937", textAlign: "center" }}>{title}</h2>
-                <div style={{ width: 36, height: 3, background: "#ef4444", margin: "14px 0", borderRadius: 2 }} />
-                <div style={{ textAlign: "center", color: "#4b5563", fontSize: "14px", lineHeight: 1.6, marginBottom: 28 }}>{message}</div>
-                <div style={{ width: "100%", display: "flex", gap: "12px", borderTop: "1px solid #f3f4f6", paddingTop: "20px" }}>
-                    <button onClick={onCancel} style={{ flex: 1, padding: "11px", background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 10, fontWeight: 600, fontSize: "14px", cursor: "pointer" }}>Cancel</button>
-                    <button onClick={onConfirm} style={{ flex: 1, padding: "11px", background: "#ef4444", color: "#fff", border: "none", borderRadius: 10, fontWeight: 600, fontSize: "14px", cursor: "pointer", boxShadow: "0 4px 14px rgba(239,68,68,0.35)" }}>{confirmText}</button>
-                </div>
-            </div>
-        </div>
-    );
-}
+import { useToast } from "../components/Toast";
+import ConfirmModal from "../components/ConfirmModal";
 
 function UsersList() {
   const navigate = useNavigate();
@@ -29,16 +11,15 @@ function UsersList() {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState({});
-  const [toast, setToast] = useState(null);
+  const { showToast, ToastComponent } = useToast();
   const [confirmModal, setConfirmModal] = useState(null);
 
   useEffect(() => {
     load();
   }, []);
 
-  const showToast = (message, type = "success") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+  const showToastOld = (message, type = "success") => {
+    showToast(message, type);
   };
 
   const load = async () => {
@@ -86,7 +67,9 @@ function UsersList() {
   const deleteUser = (email, index) => {
     setConfirmModal({
       title: "Delete User",
-      message: (<>Are you sure you want to delete<br /><strong style={{ color: "#1f2937", fontSize: "15px" }}>{email}</strong>?<br /><span style={{ fontSize: "12px", color: "#9ca3af" }}>This action cannot be undone.</span></>),
+      message: (<>Are you sure you want to delete <strong style={{ color: "#111827" }}>{email}</strong>?<br /><span style={{ fontSize: "13px", color: "#6b7280" }}>This action is permanent and cannot be undone.</span></>),
+      confirmText: "Delete User",
+      isDestructive: true,
       onConfirm: async () => {
         setConfirmModal(null);
         try {
@@ -97,7 +80,7 @@ function UsersList() {
           setUsers(prev => prev.filter(u => u.email !== email));
           showToast("User deleted");
         } catch (error) {
-          showToast("Delete failed", "error");
+          showToast(error.response?.data?.error || "Delete failed", "error");
         } finally {
           setActionLoading(prev => ({ ...prev, [index]: false }));
         }
@@ -119,20 +102,7 @@ function UsersList() {
       `}</style>
 
       <ConfirmModal isOpen={!!confirmModal} {...confirmModal} onCancel={() => setConfirmModal(null)} confirmText="Delete User" />
-
-      {/* Inline Toast */}
-      {toast && (
-        <div style={{
-          position: "fixed", top: 20, right: 20, zIndex: 1100,
-          padding: "12px 20px", borderRadius: "12px", fontWeight: 600, fontSize: "13.5px",
-          background: toast.type === "error" ? "#fef2f2" : "#f0fdf4",
-          color: toast.type === "error" ? "#dc2626" : "#15803d",
-          border: `1px solid ${toast.type === "error" ? "#fca5a5" : "#bbf7d0"}`,
-          boxShadow: "0 8px 24px rgba(0,0,0,0.08)", animation: "fadeIn 0.25s ease"
-        }}>
-          {toast.type === "error" ? "❌ " : "✅ "}{toast.message}
-        </div>
-      )}
+      {ToastComponent}
 
       {/* Header with Back button */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "36px" }}>
