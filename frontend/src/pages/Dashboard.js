@@ -2,6 +2,17 @@ import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../services/api";
 
+// Responsive hook
+function useWindowWidth() {
+  const [w, setW] = useState(window.innerWidth);
+  useEffect(() => {
+    const fn = () => setW(window.innerWidth);
+    window.addEventListener("resize", fn);
+    return () => window.removeEventListener("resize", fn);
+  }, []);
+  return w;
+}
+
 // ── Inline SVG Icons (no emojis) ─────────────────────────────────────────────
 const Icons = {
   dashboard: (
@@ -209,6 +220,8 @@ function Dashboard() {
   const navigate = useNavigate();
   const user = localStorage.getItem("user");
   const role = localStorage.getItem("role");
+  const isMobile = useWindowWidth() <= 768;
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const logout = () => { localStorage.clear(); navigate("/"); };
 
@@ -220,24 +233,39 @@ function Dashboard() {
     <div style={{
       minHeight: "100vh", background: "#f8fafc",
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-      display: "flex",
+      display: "flex", flexDirection: isMobile ? "column" : "row",
+      position: "relative",
     }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         * { box-sizing: border-box; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes slideInSidebar { from { transform: translateX(-100%); } to { transform: translateX(0); } }
       `}</style>
+
+      {/* Mobile overlay backdrop */}
+      {isMobile && sidebarOpen && (
+        <div onClick={() => setSidebarOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 99, backdropFilter: "blur(2px)" }} />
+      )}
 
       {/* ══════════════ SIDEBAR ══════════════ */}
       <aside style={{
-        width: "240px", minHeight: "100vh", flexShrink: 0,
+        width: isMobile ? "240px" : "240px",
+        minHeight: isMobile ? "100vh" : "100vh",
+        flexShrink: 0,
         background: "#0f172a",
         display: "flex", flexDirection: "column",
         boxShadow: "4px 0 24px rgba(0,0,0,0.18)",
+        // On mobile: fixed drawer
+        ...(isMobile ? {
+          position: "fixed", top: 0, left: 0, zIndex: 100,
+          transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)",
+          transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1)",
+        } : { position: "relative" }),
       }}>
 
         {/* Logo area */}
-        <div style={{ padding: "28px 20px 22px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+        <div style={{ padding: "28px 20px 22px", borderBottom: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <div style={{
               width: "40px", height: "40px", borderRadius: "10px",
@@ -256,6 +284,10 @@ function Dashboard() {
               </div>
             </div>
           </div>
+          {/* Close button on mobile */}
+          {isMobile && (
+            <button onClick={() => setSidebarOpen(false)} style={{ background: "transparent", border: "none", color: "#64748b", cursor: "pointer", padding: "4px", fontSize: "20px", lineHeight: 1 }}>×</button>
+          )}
         </div>
 
         {/* Nav section label */}
@@ -281,7 +313,9 @@ function Dashboard() {
         {/* Nav links */}
         <nav style={{ flex: 1, padding: "0 12px" }}>
           {nav.map(n => (
-            <SidebarLink key={n.to} to={n.to} iconKey={n.icon} label={n.label} />
+            <div key={n.to} onClick={() => setSidebarOpen(false)}>
+              <SidebarLink to={n.to} iconKey={n.icon} label={n.label} />
+            </div>
           ))}
         </nav>
 
@@ -328,36 +362,63 @@ function Dashboard() {
       </aside>
 
       {/* ══════════════ MAIN CONTENT ══════════════ */}
-      <main style={{ flex: 1, padding: "40px 44px", overflowY: "auto", minWidth: 0 }}>
+      <main style={{ flex: 1, padding: isMobile ? "20px 16px" : "40px 44px", overflowY: "auto", minWidth: 0 }}>
 
-        {/* Top bar */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "36px" }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: "26px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.5px" }}>
-              Welcome back, <span style={{ color: "#3b82f6" }}>{user?.split("@")[0]}</span>
-            </h1>
-            <p style={{ margin: "5px 0 0", color: "#94a3b8", fontSize: "13.5px" }}>{today}</p>
+        {/* Mobile top bar with hamburger */}
+        {isMobile && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
+            <button onClick={() => setSidebarOpen(true)} style={{ background: "#0f172a", border: "none", color: "#fff", borderRadius: "10px", padding: "10px 14px", fontSize: "18px", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "20px", lineHeight: 1 }}>☰</span>
+              <span style={{ fontSize: "13px", fontWeight: 600 }}>Menu</span>
+            </button>
+            <a href="https://dbc-6c5e2a27-b2cf.cloud.databricks.com" target="_blank" rel="noopener noreferrer"
+              style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 14px", borderRadius: "10px", textDecoration: "none", background: "linear-gradient(135deg, #FF4B2B, #FF8C00)", color: "#fff", fontWeight: 600, fontSize: "12px" }}>
+              Open Databricks
+            </a>
           </div>
+        )}
 
-          {/* Databricks link */}
-          <a
-            href="https://dbc-6c5e2a27-b2cf.cloud.databricks.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display: "flex", alignItems: "center", gap: "8px",
-              padding: "9px 18px", borderRadius: "10px", textDecoration: "none",
-              background: "linear-gradient(135deg, #FF4B2B, #FF8C00)",
-              color: "#fff", fontWeight: 600, fontSize: "13px",
-              boxShadow: "0 4px 14px rgba(255,75,43,0.3)", transition: "opacity 0.2s",
-            }}
-            onMouseEnter={e => e.currentTarget.style.opacity = "0.88"}
-            onMouseLeave={e => e.currentTarget.style.opacity = "1"}
-          >
-            {Icons.externalLink}
-            Open Databricks
-          </a>
-        </div>
+        {/* Top bar — desktop only */}
+        {!isMobile && (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "36px" }}>
+            <div>
+              <h1 style={{ margin: 0, fontSize: "26px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.5px" }}>
+                Welcome back, <span style={{ color: "#3b82f6" }}>{user?.split("@")[0]}</span>
+              </h1>
+              <p style={{ margin: "5px 0 0", color: "#94a3b8", fontSize: "13.5px" }}>{today}</p>
+            </div>
+
+            {/* Databricks link */}
+            <a
+              href="https://dbc-6c5e2a27-b2cf.cloud.databricks.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "flex", alignItems: "center", gap: "8px",
+                padding: "9px 18px", borderRadius: "10px", textDecoration: "none",
+                background: "linear-gradient(135deg, #FF4B2B, #FF8C00)",
+                color: "#fff", fontWeight: 600, fontSize: "13px",
+                boxShadow: "0 4px 14px rgba(255,75,43,0.3)", transition: "opacity 0.2s",
+              }}
+              onMouseEnter={e => e.currentTarget.style.opacity = "0.88"}
+              onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+            >
+              {Icons.externalLink}
+              Open Databricks
+            </a>
+          </div>
+        )}
+
+
+        {/* Welcome heading always visible on mobile */}
+        {isMobile && (
+          <div style={{ marginBottom: "24px" }}>
+            <h1 style={{ margin: 0, fontSize: "22px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.5px" }}>
+              Welcome, <span style={{ color: "#3b82f6" }}>{user?.split("@")[0]}</span>
+            </h1>
+            <p style={{ margin: "5px 0 0", color: "#94a3b8", fontSize: "12px" }}>{today}</p>
+          </div>
+        )}
 
         {/* Stat Cards */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px", marginBottom: "32px" }}>

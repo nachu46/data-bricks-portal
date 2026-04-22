@@ -2760,3 +2760,188 @@ td {
   }
   .execute-access-btn { font-size: 0.72rem; padding: 0.3rem 0.65rem; }
 }
+
+/* ============================================================
+   GLOBAL MOBILE RESPONSIVE — Databricks Portal
+   Covers: Dashboard, AssignAccess, ManageUsers, AuditLogs, RLAC
+   ============================================================ */
+
+/* Ensure all tables scroll horizontally on small screens */
+.responsive-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Meta viewport fix - ensure <meta name="viewport"> is set in index.html */
+* {
+  box-sizing: border-box;
+}
+
+/* ── Tablet (≤ 900px) ── */
+@media (max-width: 900px) {
+  /* Dashboard sidebar collapses */
+  .dashboard-container {
+    flex-direction: column !important;
+  }
+  .sidebar {
+    width: 100% !important;
+    order: 1 !important;
+    padding: 16px 20px !important;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+  .sidebar-header {
+    width: 100% !important;
+  }
+  .sidebar-header h3 {
+    margin-bottom: 8px !important;
+    font-size: 18px !important;
+  }
+  .main-content {
+    padding: 20px 16px !important;
+    order: 2 !important;
+  }
+
+  /* Stats grid: 2 columns on tablet */
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 14px !important;
+  }
+
+  /* All inline-style pages: reduce padding */
+  [style*="padding: \"40px 44px\""] {
+    padding: 20px 16px !important;
+  }
+}
+
+/* ── Mobile (≤ 640px) ── */
+@media (max-width: 640px) {
+  /* Full-width tables scroll horizontally */
+  table {
+    min-width: 600px;
+  }
+  div[style*="overflowX"] {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Stats grid: 1 column on mobile */
+  .stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Header rows: stack vertically */
+  div[style*="justifyContent: \"space-between\""][style*="alignItems: \"flex-start\""],
+  div[style*="justifyContent: \"space-between\""][style*="alignItems: \"center\""] {
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+
+  /* Form grids: stack on mobile */
+  div[style*="gridTemplateColumns"][style*="repeat"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Modals: full width */
+  div[style*="maxWidth: 440"],
+  div[style*="maxWidth: \"440px\""],
+  div[style*="maxWidth: 420"],
+  div[style*="maxWidth: \"420px\""] {
+    max-width: 95vw !important;
+    padding: 24px 18px !important;
+  }
+
+  /* Stat number responsive */
+  .stat-number {
+    font-size: 32px !important;
+  }
+
+  /* Action button rows: wrap */
+  div[style*="display: \"flex\""][style*="gap"] button {
+    font-size: 12px !important;
+  }
+
+  /* Reduce page title size */
+  h1[style*="fontSize: \"26px\""],
+  h1[style*="fontSize: \"28px\""],
+  h1[style*="fontSize: \"30px\""] {
+    font-size: 20px !important;
+  }
+}
+
+/* ── Small Phone (≤ 480px) ── */
+@media (max-width: 480px) {
+  /* Reduce outer padding */
+  body {
+    font-size: 14px;
+  }
+
+  /* Login card */
+  .login-card {
+    padding: 28px 18px !important;
+    margin: 8px !important;
+    border-radius: 18px !important;
+  }
+  .login-welcome h1 {
+    font-size: 24px !important;
+  }
+
+  /* Sidebar: icon-only mode simulation */
+  .sidebar {
+    padding: 12px !important;
+  }
+  .menu-item {
+    padding: 10px 12px !important;
+    font-size: 13px !important;
+  }
+
+  /* Section boxes */
+  .section-box {
+    padding: 18px !important;
+    border-radius: 16px !important;
+  }
+
+  /* Toast: full width on mobile */
+  .inline-toast-white {
+    right: 10px !important;
+    left: 10px !important;
+    min-width: auto !important;
+    width: calc(100% - 20px) !important;
+  }
+
+  /* Tab buttons */
+  div[style*="borderBottom: \"2px solid\""] button,
+  div[style*="borderBottom"] > button {
+    font-size: 13px !important;
+    padding: 8px 12px !important;
+  }
+
+  /* Form inputs full-width */
+  input[style], select[style], textarea[style] {
+    width: 100% !important;
+    font-size: 15px !important;
+  }
+
+  /* Reduce table font size */
+  td, th {
+    font-size: 12px !important;
+    padding: 8px 10px !important;
+  }
+
+  /* Buttons in table actions */
+  button[style*="padding: \"4px 10px\""] {
+    padding: 5px 8px !important;
+    font-size: 11px !important;
+  }
+}
+
+/* ── Ensure viewport meta is respected ── */
+@media (max-width: 400px) {
+  .dashboard-container,
+  [style*="minHeight: \"100vh\""] {
+    min-height: auto !important;
+  }
+}
