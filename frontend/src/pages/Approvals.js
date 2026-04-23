@@ -35,7 +35,7 @@ function Approvals() {
   const approve = async (user, table) => {
     try {
       await api.post("/admin/approve", { user, table }, { headers: authHeaders() });
-      showToast(`Approved ${user} → ${table}`);
+      showToast(`Approved ${user} → ${table}`, "success");
       load();
     } catch (error) {
       console.error("Approval error:", error);

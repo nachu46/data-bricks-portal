@@ -255,6 +255,12 @@ export function useToast(autoDismissMs = 4500) {
     } else {
       subtitle = subtitleOrType;
     }
+
+    // Auto-detect "success" if not explicitly set and title sounds successful
+    if (resolvedType === "error" && (title.toLowerCase().includes("success") || title.toLowerCase().includes("done") || title.toLowerCase().includes("deleted"))) {
+      resolvedType = "success";
+    }
+
     clearTimeout(timerRef.current);
     setToast({ title, subtitle, type: resolvedType });
     if (autoDismissMs > 0) {

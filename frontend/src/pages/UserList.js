@@ -78,7 +78,7 @@ function UsersList() {
           const currentUser = localStorage.getItem("user") || "";
           await api.post("/access/delete-user", { email }, { headers: { role, user: currentUser } });
           setUsers(prev => prev.filter(u => u.email !== email));
-          showToast("User deleted");
+          showToast("User deleted", "success");
         } catch (error) {
           showToast(error.response?.data?.error || "Delete failed", "error");
         } finally {

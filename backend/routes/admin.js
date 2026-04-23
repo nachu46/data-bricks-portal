@@ -106,12 +106,12 @@ router.post("/revoke-access", requireAdmin, async (req, res) => {
     // 1. Execute Revoke
     await db.revokeDirectAccess(user, catalog, schema, table);
 
-    // 2. Update Metadata Table (Remove from UI)
-    await db.deletePolicy(user, schema, table);
+    // 2. Update Metadata Table (Soft-revoke with timestamp)
+    const adminEmail = req.user.email; // From JWT
+    await db.deletePolicy(user, catalog, schema, table, adminEmail);
 
     // 3. Insert Audit Log
     const tableName = `${catalog}.${schema}.${table}`;
-    const adminEmail = req.user.email; // From JWT
     const policyId = `${user}|${schema}|${table}`;
     await db.insertAuditLog("REVOKE", user, tableName, adminEmail, catalog, schema, policyId, null);
 
@@ -195,25 +195,46 @@ router.get("/live-grants", requireAdmin, async (req, res) => {
     const rows = await db.getLiveGrantsFromDatabricks();
     // rows: [principal_name, privilege, catalog_name, schema_name, table_pattern, is_grantable]
 
-    // Also fetch our portal metadata to cross-reference (with timestamp)
-    let portalMap = new Map(); // key -> created_at timestamp
+    // Also fetch our portal metadata to cross-reference (with timestamps)
+    let portalMap = new Map(); // key -> metadata object
+    let inactivePolicies = [];
     try {
       const portalResult = await db.executeSQL(`
-        SELECT principal_name, privilege, catalog_name, schema_name, table_pattern, created_at
+        SELECT LOWER(principal_name), LOWER(catalog_name), LOWER(schema_name), LOWER(table_pattern), created_at, is_active, revoked_at, revoked_by, privilege
         FROM workspace.governance.access_policies
       `);
       const portalRows = portalResult?.result?.data_array || [];
       portalRows.forEach(r => {
-        const key = `${r[0]}|${r[1]}|${r[2]}|${r[3]}|${r[4]}`.toLowerCase();
-        portalMap.set(key, r[5] || null); // store created_at
+        // key: principal|catalog|schema|table
+        const key = `${r[0]}|${r[1]}|${r[2]}|${r[3]}`.toLowerCase();
+        const meta = { created_at: r[4], is_active: r[5], revoked_at: r[6], revoked_by: r[7], privilege: r[8] };
+        
+        if (r[5] === false || r[5] === 'false' || r[5] === 0) {
+          inactivePolicies.push({
+            user_email:   r[0],
+            catalog_name: r[1],
+            schema_name:  r[2],
+            table_name:   r[3],
+            privilege:    r[8] || "SELECT", 
+            source:       "portal",
+            status:       "INACTIVE",
+            created_at:   r[4],
+            revoked_at:   r[6],
+            revoked_by:   r[7]
+          });
+        } else {
+          portalMap.set(key, meta);
+        }
       });
     } catch (e) {
       console.warn("⚠️  Could not fetch portal metadata for cross-reference:", e.message);
     }
 
-    const data = rows.map(r => {
-      const key = `${r[0]}|${r[1]}|${r[2]}|${r[3]}|${r[4]}`.toLowerCase();
-      const isPortal = portalMap.has(key);
+    // Process active grants from Unity Catalog
+    const activeData = rows.map(r => {
+      // principal_name, privilege, catalog_name, schema_name, table_pattern
+      const key = `${r[0]}|${r[2]}|${r[3]}|${r[4]}`.toLowerCase();
+      const meta = portalMap.get(key);
       return {
         user_email:   r[0],
         privilege:    r[1],
@@ -221,11 +242,14 @@ router.get("/live-grants", requireAdmin, async (req, res) => {
         schema_name:  r[3],
         table_name:   r[4],
         is_grantable: r[5],
-        source:       isPortal ? "portal" : "manual",
-        created_at:   isPortal ? portalMap.get(key) : null // only portal grants have timestamp
+        source:       meta ? "portal" : "manual",
+        status:       "ACTIVE",
+        created_at:   meta ? meta.created_at : null
       };
     });
 
+    // Combine active grants and historical revokes
+    const data = [...activeData, ...inactivePolicies];
     res.json({ success: true, data });
   } catch (err) {
     console.error("❌ Live grants error:", err.message);

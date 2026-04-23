@@ -41,6 +41,7 @@ function GrantAccessTab({ showToast }) {
     const [availableUsers, setAvailableUsers] = useState([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
     const [form, setForm] = useState({ user: "", catalog: "", schema: "", table: "", privilege: "SELECT" });
+    const [showInactive, setShowInactive] = useState(false);
 
     // Load catalogs and available users on mount
     useEffect(() => {
@@ -112,7 +113,7 @@ function GrantAccessTab({ showToast }) {
             // Updated to call /admin/grant-access directly
             const res = await api.post("/admin/grant-access", form);
             if (res.data.success) {
-                showToast("Access granted successfully");
+                showToast("Access granted successfully", "success");
                 setForm({ user: "", catalog: "", schema: "", table: "", privilege: "SELECT" });
                 setSchemas([]); setTables([]);
                 loadPolicies(); // Refresh the table below
@@ -142,7 +143,7 @@ function GrantAccessTab({ showToast }) {
                 try {
                     const res = await api.post("/admin/revoke-access", { user: email, catalog, schema, table });
                     if (res.data.success) {
-                        showToast("Access revoked successfully");
+                        showToast("Access revoked successfully", "success");
                         loadPolicies();
                     }
                 } catch (err) {
@@ -164,73 +165,101 @@ function GrantAccessTab({ showToast }) {
             <ConfirmModal isOpen={!!confirmModal} {...confirmModal} onCancel={() => setConfirmModal(null)} isDestructive={true} confirmText="Revoke Access" />
 
             {/* Form */}
+            {/* Premium Grant Form */}
             <div style={{
-                background: "#fff", borderRadius: "18px", padding: "28px",
-                boxShadow: "0 1px 12px rgba(0,0,0,0.05)", border: "1px solid #f1f5f9",
-                marginTop: 20, maxWidth: 700
+                background: "#fff", borderRadius: "16px", padding: "32px",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.03)", border: "1px solid #f1f5f9",
+                marginTop: 24, maxWidth: "100%"
             }}>
-                <div style={{ borderBottom: "1px solid #f3f4f6", paddingBottom: "12px", marginBottom: "20px" }}>
-                    <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>Grant Databricks Privilege</h3>
+                <div style={{ borderBottom: "1px solid #f3f4f6", paddingBottom: "16px", marginBottom: "28px", display: "flex", alignItems: "center", gap: "10px" }}>
+                    <div style={{ width: "8px", height: "18px", background: "linear-gradient(#1e3a5f, #3b82f6)", borderRadius: "4px" }}></div>
+                    <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.5px" }}>Grant Databricks Privilege</h3>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+                
+                <div className="grant-form-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "24px" }}>
                     <div style={{ gridColumn: "1 / -1" }}>
-                        <label style={labelStyle}>User Email {loadingUsers && <span style={{ color: "#9ca3af" }}> Loading suggestions...</span>}</label>
-                        <input type="email" placeholder="user@company.com" value={form.user}
-                            onChange={e => setForm({ ...form, user: e.target.value })} disabled={submitting}
-                            style={inputStyle} list="user-suggestions" />
+                        <label style={labelStyle}>
+                            User Email 
+                            {loadingUsers && <span style={{ marginLeft: "8px", color: "#3b82f6", fontWeight: 400, textTransform: "none", animation: "pulse 1.5s infinite" }}>• Fetching identities...</span>}
+                        </label>
+                        <div style={{ position: "relative" }}>
+                            <input 
+                                type="email" 
+                                placeholder="name@company.com" 
+                                value={form.user}
+                                onChange={e => setForm({ ...form, user: e.target.value })} 
+                                disabled={submitting}
+                                style={{ ...inputStyle, paddingLeft: "38px", height: "42px", fontWeight: 500 }} 
+                                list="user-suggestions" 
+                            />
+                            <div style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+                                </svg>
+                            </div>
+                        </div>
                         <datalist id="user-suggestions">
                             {availableUsers.map(u => <option key={u} value={u} />)}
                         </datalist>
                     </div>
 
                     <div>
-                        <label style={labelStyle}>Catalog {loadingCatalogs && <span style={{ color: "#9ca3af" }}> Loading...</span>}</label>
-                        <select value={form.catalog} onChange={e => setForm({ ...form, catalog: e.target.value })} disabled={loadingCatalogs || submitting} style={inputStyle}>
+                        <label style={labelStyle}>Catalog</label>
+                        <select value={form.catalog} onChange={e => setForm({ ...form, catalog: e.target.value })} disabled={loadingCatalogs || submitting} style={{ ...inputStyle, height: "42px" }}>
                             <option value="">{loadingCatalogs ? "Loading..." : "Select catalog"}</option>
                             {catalogs.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                     </div>
 
                     <div>
-                        <label style={labelStyle}>Schema {loadingSchemas && <span style={{ color: "#9ca3af" }}> Loading...</span>}</label>
-                        <select value={form.schema} onChange={e => setForm({ ...form, schema: e.target.value })} disabled={!form.catalog || loadingSchemas || submitting} style={inputStyle}>
+                        <label style={labelStyle}>Schema</label>
+                        <select value={form.schema} onChange={e => setForm({ ...form, schema: e.target.value })} disabled={!form.catalog || loadingSchemas || submitting} style={{ ...inputStyle, height: "42px" }}>
                             <option value="">{!form.catalog ? "Select catalog first" : loadingSchemas ? "Loading..." : "Select schema"}</option>
                             {schemas.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
 
                     <div>
-                        <label style={labelStyle}>Table {loadingTables && <span style={{ color: "#9ca3af" }}> Loading...</span>}</label>
-                        <select value={form.table} onChange={e => setForm({ ...form, table: e.target.value })} disabled={!form.schema || loadingTables || submitting} style={inputStyle}>
+                        <label style={labelStyle}>Table</label>
+                        <select value={form.table} onChange={e => setForm({ ...form, table: e.target.value })} disabled={!form.schema || loadingTables || submitting} style={{ ...inputStyle, height: "42px" }}>
                             <option value="">{!form.schema ? "Select schema first" : loadingTables ? "Loading..." : "Select table"}</option>
                             {tables.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
                     </div>
 
                     <div>
-                        <label style={labelStyle}>Privilege</label>
-                        <select value={form.privilege} onChange={e => setForm({ ...form, privilege: e.target.value })} disabled={submitting} style={inputStyle}>
-                            <option value="SELECT">SELECT</option>
-                            <option value="MODIFY">MODIFY</option>
-                            <option value="ALL PRIVILEGES">ALL PRIVILEGES</option>
+                        <label style={labelStyle}>Privilege Level</label>
+                        <select value={form.privilege} onChange={e => setForm({ ...form, privilege: e.target.value })} disabled={submitting} style={{ ...inputStyle, height: "42px", fontWeight: 600, color: "#1e3a5f" }}>
+                            <option value="SELECT">SELECT (Read Only)</option>
+                            <option value="MODIFY">MODIFY (Read/Write)</option>
+                            <option value="ALL PRIVILEGES">ALL PRIVILEGES (Full Control)</option>
                         </select>
                     </div>
                 </div>
 
                 {canSubmit && (
-                    <div style={{ margin: "20px 0 0", padding: "12px 16px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", fontSize: "13px", color: "#334155", fontFamily: "monospace", wordBreak: "break-all" }}>
-                        GRANT <span style={{ color: "#1d4ed8", fontWeight: 600 }}>{form.privilege}</span> ON TABLE <span style={{ color: "#0f172a", fontWeight: 600 }}>{form.catalog}.{form.schema}.{form.table}</span> TO `<span style={{ color: "#0f172a", fontWeight: 600 }}>{form.user}</span>`
+                    <div style={{ 
+                        margin: "28px 0 0", padding: "16px 20px", background: "#f8fafc", 
+                        border: "1px dashed #cbd5e1", borderRadius: "12px", 
+                        fontSize: "13px", color: "#475569", animation: "fadeIn 0.3s ease-out" 
+                    }}>
+                        <div style={{ marginBottom: "8px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", fontSize: "11px" }}>Preview Command</div>
+                        <code style={{ fontFamily: "'JetBrains Mono', monospace", color: "#0f172a", wordBreak: "break-all" }}>
+                            GRANT <span style={{ color: "#3b82f6", fontWeight: 700 }}>{form.privilege}</span> ON TABLE <span style={{ fontWeight: 700 }}>{form.catalog}.{form.schema}.{form.table}</span> TO <span style={{ color: "#1e3a5f", fontWeight: 600 }}>`{form.user}`</span>
+                        </code>
                     </div>
                 )}
 
-                <div style={{ paddingTop: "24px" }}>
+                <div style={{ paddingTop: "32px", display: "flex", justifyContent: "flex-start" }}>
                     <button onClick={assign} disabled={!canSubmit || submitting} style={{
-                        padding: "10px 24px", background: canSubmit ? "linear-gradient(135deg,#1e3a5f,#0f172a)" : "#e2e8f0",
+                        padding: "12px 32px", background: canSubmit ? "linear-gradient(135deg, #1e3a5f, #0f172a)" : "#f1f5f9",
                         color: canSubmit ? "#fff" : "#94a3b8", border: "none", borderRadius: "10px",
-                        fontWeight: 600, fontSize: "13.5px", cursor: canSubmit ? "pointer" : "default",
-                        boxShadow: canSubmit ? "0 4px 14px rgba(15,23,42,0.2)" : "none", transition: "all 0.2s"
+                        fontWeight: 700, fontSize: "14px", cursor: canSubmit ? "pointer" : "not-allowed",
+                        boxShadow: canSubmit ? "0 10px 15px -3px rgba(15,23,42,0.25)" : "none", 
+                        transition: "all 0.2s", display: "flex", alignItems: "center", gap: "8px"
                     }}>
-                        {submitting ? "Granting..." : "Grant Access"}
+                        {submitting && <div style={{ width: "14px", height: "14px", border: "2px solid #fff", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.6s linear infinite" }}></div>}
+                        {submitting ? "Processing..." : "Grant Access"}
                     </button>
                 </div>
             </div>
@@ -242,9 +271,18 @@ function GrantAccessTab({ showToast }) {
                 marginTop: "24px"
             }}>
                 <div style={{ borderBottom: "1px solid #f3f4f6", paddingBottom: "16px", marginBottom: "16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
-                        Granted Access Policies ({policies.length})
-                    </h3>
+                    <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                        <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+                            Granted Access Policies ({policies.filter(p => showInactive ? p.status === "INACTIVE" : p.status !== "INACTIVE").length})
+                        </h3>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "#f1f5f9", padding: "4px 12px", borderRadius: "20px", cursor: "pointer" }} onClick={() => setShowInactive(!showInactive)}>
+                            <span style={{ fontSize: "11px", fontWeight: 700, color: showInactive ? "#64748b" : "#1d4ed8" }}>Active</span>
+                            <div style={{ width: "24px", height: "14px", background: showInactive ? "#3b82f6" : "#cbd5e1", borderRadius: "10px", position: "relative", transition: "all 0.2s" }}>
+                                <div style={{ width: "10px", height: "10px", background: "#fff", borderRadius: "50%", position: "absolute", top: "2px", left: showInactive ? "12px" : "2px", transition: "all 0.2s" }} />
+                            </div>
+                            <span style={{ fontSize: "11px", fontWeight: 700, color: showInactive ? "#1d4ed8" : "#64748b" }}>History</span>
+                        </div>
+                    </div>
                     <button onClick={loadPolicies} disabled={loadingPolicies} style={{ padding: "6px 14px", border: "1px solid #e2e8f0", borderRadius: "8px", background: "#f8fafc", cursor: "pointer", fontSize: "12px", fontWeight: 600, color: "#475569" }}>
                         {loadingPolicies ? "Loading..." : "Refresh"}
                     </button>
@@ -265,14 +303,14 @@ function GrantAccessTab({ showToast }) {
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
                             <thead>
                                 <tr>
-                                    {["User", "Catalog", "Schema", "Table", "Privilege", "Source", "Granted At", "Actions"].map(h => (
+                                    {["User", "Catalog", "Schema", "Table", "Privilege", "Source", "Granted At", showInactive ? "Revoked At" : "Actions"].map(h => (
                                         <th key={h} style={{ padding: "12px 16px", textAlign: "left", color: "#64748b", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>{h}</th>
                                     ))}
                                 </tr>
                             </thead>
                             <tbody>
-                                {policies.map((p, i) => (
-                                    <tr key={i} style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" }} onMouseEnter={e => e.currentTarget.style.background = "#f8fafc"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                                {policies.filter(p => showInactive ? p.status === "INACTIVE" : p.status !== "INACTIVE").map((p, i) => (
+                                    <tr key={i} style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s", opacity: p.status === "INACTIVE" ? 0.7 : 1 }} onMouseEnter={e => e.currentTarget.style.background = "#f8fafc"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                                         <td style={{ padding: "14px 16px", color: "#1e293b", fontWeight: 600 }}>{p.user_email}</td>
                                         <td style={{ padding: "14px 16px" }}><code style={{ background: "#f1f5f9", padding: "3px 8px", borderRadius: "6px", fontSize: "12px", color: "#475569" }}>{p.catalog_name}</code></td>
                                         <td style={{ padding: "14px 16px" }}><code style={{ background: "#f1f5f9", padding: "3px 8px", borderRadius: "6px", fontSize: "12px", color: "#475569" }}>{p.schema_name}</code></td>
@@ -294,13 +332,19 @@ function GrantAccessTab({ showToast }) {
                                             {p.created_at ? fmtTs(p.created_at) : <span style={{ color: "#cbd5e1" }}>—</span>}
                                         </td>
                                         <td style={{ padding: "14px 16px" }}>
-                                            <button
-                                                onClick={() => revoke(p.user_email, p.catalog_name, p.schema_name, p.table_name)}
-                                                disabled={loadingPolicies}
-                                                style={{ padding: "4px 10px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: "6px", cursor: "pointer", fontSize: "11px", fontWeight: 700 }}
-                                            >
-                                                Revoke
-                                            </button>
+                                            {p.status === "INACTIVE" ? (
+                                                <span style={{ color: "#ef4444", fontWeight: 600, fontSize: "12px" }}>
+                                                    {p.revoked_at ? fmtTs(p.revoked_at) : "Revoked"}
+                                                </span>
+                                            ) : (
+                                                <button
+                                                    onClick={() => revoke(p.user_email, p.catalog_name, p.schema_name, p.table_name)}
+                                                    disabled={loadingPolicies}
+                                                    style={{ padding: "4px 10px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: "6px", cursor: "pointer", fontSize: "11px", fontWeight: 700 }}
+                                                >
+                                                    Revoke
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}
@@ -536,18 +580,28 @@ function AdminAssignAccess() {
     const { showToast, ToastComponent } = useToast();
 
     return (
-        <div style={{ minHeight: "100vh", background: "#f8fafc", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", padding: "40px 44px" }}>
+        <div className="main-container" style={{ minHeight: "100vh", background: "#f8fafc", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", padding: "40px 44px" }}>
             <style>{`
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
                 * { box-sizing: border-box; }
                 @keyframes spin { to { transform: rotate(360deg); } }
                 @keyframes fadeIn { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:none; } }
+                @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
+                
+                @media (max-width: 768px) {
+                    .main-container { padding: 20px 16px !important; }
+                    .header-flex { flex-direction: column !important; gap: 20px !important; align-items: flex-start !important; }
+                    .grant-form-grid { grid-template-columns: 1fr !important; }
+                    .tab-switcher { width: 100% !important; display: flex !important; }
+                    .tab-switcher button { flex: 1 !important; padding: 10px 12px !important; font-size: 12px !important; }
+                    h1 { font-size: 20px !important; }
+                }
             `}</style>
 
             {ToastComponent}
 
             {/* Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "36px" }}>
+            <div className="header-flex" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "36px" }}>
                 <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
                     <button onClick={() => navigate("/dashboard")} style={{
                         background: "#fff", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "8px 14px",
@@ -566,7 +620,7 @@ function AdminAssignAccess() {
             </div>
 
             {/* Tabs */}
-            <div style={{ display: "flex", gap: "8px", background: "#e2e8f0", borderRadius: "12px", padding: "6px", width: "fit-content", marginBottom: "24px" }}>
+            <div className="tab-switcher" style={{ display: "flex", gap: "8px", background: "#e2e8f0", borderRadius: "12px", padding: "6px", width: "fit-content", marginBottom: "24px" }}>
                 {[["grant", "Grant Access"], ["rlac", "Row-Level Access"]].map(([id, label]) => (
                     <button key={id} onClick={() => setActiveTab(id)} style={{
                         padding: "8px 24px", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: 700, cursor: "pointer",

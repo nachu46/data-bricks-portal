@@ -287,10 +287,12 @@ async function getAllPoliciesEnriched() {
         table_pattern                                                 AS table_name,
         privilege                                                     AS privileges,
         CASE WHEN is_active = true THEN 'ACTIVE' ELSE 'INACTIVE' END AS status,
-        created_at                                                    AS created_time
+        created_at                                                    AS created_time,
+        revoked_at                                                    AS revoked_time,
+        revoked_by
       FROM workspace.governance.access_policies
       WHERE principal_type = 'USER'
-      ORDER BY principal_name
+      ORDER BY created_at DESC
     `);
   } catch (e) {
     console.error("❌ getAllPoliciesEnriched failed:", e.message);
@@ -314,17 +316,23 @@ async function getMyAccess(email) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POLICY: delete a policy
+// POLICY: revoke a policy (soft-delete with timestamp)
 // ─────────────────────────────────────────────────────────────────────────────
-async function deletePolicy(email, schema, table) {
+async function revokePolicy(email, catalog, schema, table, revokedBy) {
   return executeSQL(`
-    DELETE FROM workspace.governance.access_policies
-    WHERE principal_name = ${esc(email)}
-      AND principal_type = 'USER'
-      AND schema_name    = ${esc(schema)}
-      AND table_pattern  = ${esc(table)}
+    UPDATE workspace.governance.access_policies
+    SET is_active  = false,
+        revoked_at = current_timestamp(),
+        revoked_by = ${esc(revokedBy || 'admin')}
+    WHERE LOWER(principal_name) = LOWER(${esc(email)})
+      AND LOWER(catalog_name)   = LOWER(${esc(catalog)})
+      AND LOWER(schema_name)    = LOWER(${esc(schema)})
+      AND LOWER(table_pattern)  = LOWER(${esc(table)})
   `);
 }
+
+// Keep alias for backward compatibility or direct replacement
+const deletePolicy = revokePolicy;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POLICY: toggle active state
@@ -419,7 +427,9 @@ async function assignAccess(user, catalog, schema, table, privilege, createdBy) 
       privilege   = s.privilege,
       is_active   = ${grantOk ? "true" : "false"},
       created_at  = current_timestamp(),
-      created_by  = s.created_by
+      created_by  = s.created_by,
+      revoked_at  = NULL,
+      revoked_by  = NULL
     WHEN NOT MATCHED THEN INSERT (
       principal_type, principal_name, catalog_name, schema_name, table_pattern, privilege, is_active, created_at, created_by
     ) VALUES (

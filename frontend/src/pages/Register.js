@@ -30,7 +30,7 @@ function Register() {
       });
 
       if (res.data.success) {
-        showToast("User created successfully!");
+        showToast("User created successfully!", "success");
         setTimeout(() => {
           window.location.href = "/dashboard";
         }, 1500);
