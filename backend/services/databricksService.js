@@ -908,12 +908,16 @@ module.exports = {
     const filters = [];
     const tryFilter = (policyKey, value) => {
       if (!value) return;
-      // Try exact, then underscore version
+      // Try exact, then underscore version, then _id version
       const underscoreVersion = policyKey.replace(/code$/, "_code");
+      const idVersion = policyKey.replace(/code$/, "_id");
+      
       if (columns.includes(policyKey.toLowerCase())) {
         filters.push(`${policyKey} = ${esc(value)}`);
       } else if (columns.includes(underscoreVersion.toLowerCase())) {
         filters.push(`${underscoreVersion} = ${esc(value)}`);
+      } else if (columns.includes(idVersion.toLowerCase())) {
+        filters.push(`${idVersion} = ${esc(value)}`);
       } else {
         // Fallback to literal if columns couldn't be fetched
         filters.push(`${policyKey} = ${esc(value)}`);
@@ -930,7 +934,8 @@ module.exports = {
     // 3. Execute the filtered query
     const sql = `SELECT * FROM ${safeTable} ${whereClause} LIMIT 10`;
     console.log(`[RLAC Preview] Executing: ${sql}`);
-    return await executeSQL(sql);
+    const result = await executeSQL(sql);
+    return { ...result, appliedFilters: filters };
   },
 
   deploySecuredView: async (catalog, schema, table) => {

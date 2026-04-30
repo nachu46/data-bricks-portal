@@ -90,92 +90,134 @@ function PreviewModal({ isOpen, onClose, principalName, showToast }) {
     if (!isOpen) return null;
 
     return (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "20px" }}>
-            <div style={{ background: "#fff", width: "100%", maxWidth: "900px", maxHeight: "90vh", borderRadius: "18px", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column", overflow: "hidden", animation: "fadeIn 0.2s ease-out" }}>
-                <div style={{ padding: "24px 32px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.4)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "20px" }}>
+            <div style={{ background: "#fff", width: "100%", maxWidth: "1100px", maxHeight: "85vh", borderRadius: "24px", boxShadow: "0 25px 70px -12px rgba(0,0,0,0.15)", display: "flex", flexDirection: "column", overflow: "hidden", animation: "fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)" }}>
+                
+                {/* Header */}
+                <div style={{ padding: "32px 40px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                     <div>
-                        <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 800, color: "#0f172a" }}>RLAC Data Preview</h2>
-                        <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#64748b" }}>Simulating view for: <strong>{principalName}</strong></p>
+                        <h2 style={{ margin: 0, fontSize: "22px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.5px" }}>RLAC Data Preview</h2>
+                        <p style={{ margin: "6px 0 0", fontSize: "14px", color: "#64748b" }}>Simulating view for: <strong style={{ color: "#2563eb" }}>{principalName}</strong></p>
                     </div>
-                    <button onClick={onClose} style={{ background: "#f1f5f9", border: "none", width: "32px", height: "32px", borderRadius: "10px", cursor: "pointer", color: "#64748b", fontWeight: 800 }}>×</button>
-                </div>
-
-                <div style={{ padding: "24px 32px", background: "#f8fafc", borderBottom: "1px solid #f1f5f9", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", alignItems: "flex-end" }}>
-                    <div>
-                        <label style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", display: "block", marginBottom: "6px" }}>Catalog</label>
-                        <select value={selection.catalog} onChange={e => setSelection({ ...selection, catalog: e.target.value, schema: "", table: "" })} style={{ width: "100%", padding: "8px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-                            <option value="">Select Catalog</option>
-                            {catalogs.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", display: "block", marginBottom: "6px" }}>Schema</label>
-                        <select value={selection.schema} onChange={e => setSelection({ ...selection, schema: e.target.value, table: "" })} disabled={!selection.catalog} style={{ width: "100%", padding: "8px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-                            <option value="">Select Schema</option>
-                            {schemas.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", display: "block", marginBottom: "6px" }}>Table</label>
-                        <select value={selection.table} onChange={e => setSelection({ ...selection, table: e.target.value })} disabled={!selection.schema} style={{ width: "100%", padding: "8px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-                            <option value="">Select Table</option>
-                            {tables.map(t => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                    </div>
-                    <button onClick={runPreview} disabled={!selection.table || loadingData} style={{ background: "linear-gradient(135deg, #3b82f6, #1d4ed8)", color: "#fff", border: "none", borderRadius: "8px", padding: "10px 20px", fontWeight: 700, fontSize: "13px", cursor: "pointer", boxShadow: "0 4px 12px rgba(59,130,246,0.3)" }}>
-                        {loadingData ? "Running..." : "Preview Data"}
-                    </button>
-                    <button onClick={handleDeploy} disabled={!selection.table || deploying} style={{ background: "linear-gradient(135deg, #10b981, #059669)", color: "#fff", border: "none", borderRadius: "8px", padding: "10px 20px", fontWeight: 700, fontSize: "13px", cursor: "pointer", boxShadow: "0 4px 12px rgba(16,185,129,0.3)" }}>
-                        {deploying ? "Deploying..." : "🚀 Enforce in Databricks"}
+                    <button onClick={onClose} style={{ background: "#f1f5f9", border: "none", width: "36px", height: "36px", borderRadius: "10px", cursor: "pointer", color: "#64748b", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = "#e2e8f0"}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                     </button>
                 </div>
 
-                <div style={{ flex: 1, overflow: "auto", padding: "32px" }}>
-                    {!data ? (
-                        <div style={{ textAlign: "center", color: "#94a3b8", padding: "60px 0" }}>
-                            <div style={{ fontSize: "40px", marginBottom: "16px" }}>🔍</div>
-                            <div style={{ fontWeight: 600 }}>Select a table above to verify real-time filtering</div>
+                {/* Filters */}
+                <div style={{ padding: "0 40px 32px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto auto", gap: "16px", alignItems: "flex-end" }}>
+                    {[
+                        { label: "Catalog", value: selection.catalog, options: catalogs, onChange: v => setSelection({ ...selection, catalog: v, schema: "", table: "" }) },
+                        { label: "Schema", value: selection.schema, options: schemas, onChange: v => setSelection({ ...selection, schema: v, table: "" }), disabled: !selection.catalog },
+                        { label: "Table", value: selection.table, options: tables, onChange: v => setSelection({ ...selection, table: v }), disabled: !selection.schema }
+                    ].map((f, i) => (
+                        <div key={i}>
+                            <label style={{ fontSize: "12px", fontWeight: 700, color: "#64748b", display: "block", marginBottom: "8px" }}>{f.label}</label>
+                            <select 
+                                value={f.value} 
+                                onChange={e => f.onChange(e.target.value)} 
+                                disabled={f.disabled}
+                                style={{ width: "100%", padding: "10px 14px", borderRadius: "12px", border: "1.5px solid #e2e8f0", background: "#fff", fontSize: "13.5px", fontWeight: 500, color: "#0f172a", outline: "none", cursor: f.disabled ? "not-allowed" : "pointer", appearance: "none" }}
+                            >
+                                <option value="">Select {f.label}</option>
+                                {f.label === "Catalog" ? (catalogs || []).map(opt => <option key={opt} value={opt}>{opt}</option>) :
+                                 f.label === "Schema" ? (schemas || []).map(opt => <option key={opt} value={opt}>{opt}</option>) :
+                                 (tables || []).map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                            </select>
                         </div>
-                    ) : data.data_array?.length === 0 ? (
-                        <div style={{ textAlign: "center", color: "#ef4444", padding: "40px" }}>
-                            <div style={{ fontSize: "24px", marginBottom: "12px" }}>⚠️</div>
-                            <div style={{ fontWeight: 700 }}>No rows found matching this user's filters!</div>
-                            <p style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}>The security policy correctly filtered out all data from this table.</p>
+                    ))}
+                    
+                    <button onClick={runPreview} disabled={!selection.table || loadingData} style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: "12px", padding: "11px 24px", fontWeight: 700, fontSize: "14px", cursor: "pointer", height: "42px", transition: "all 0.2s", opacity: !selection.table ? 0.6 : 1 }}>
+                        {loadingData ? "Processing..." : "Preview Data"}
+                    </button>
+                    
+                    <button onClick={handleDeploy} disabled={!selection.table || deploying} style={{ background: "#fff", color: "#10b981", border: "1.5px solid #10b981", borderRadius: "12px", padding: "11px 24px", fontWeight: 700, fontSize: "14px", cursor: "pointer", height: "42px", display: "flex", alignItems: "center", gap: "8px", transition: "all 0.2s", opacity: !selection.table ? 0.6 : 1 }}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        {deploying ? "Deploying..." : "Enforce in Databricks"}
+                    </button>
+                </div>
+
+                <div style={{ height: "1px", background: "#f1f5f9", margin: "0 40px" }} />
+
+                {/* Content */}
+                <div style={{ flex: 1, overflow: "auto", padding: "40px" }}>
+                    {!data && !loadingData && (
+                        <div style={{ textAlign: "center", color: "#94a3b8", padding: "80px 0" }}>
+                            <div style={{ fontSize: "48px", marginBottom: "20px" }}>🔍</div>
+                            <div style={{ fontSize: "16px", fontWeight: 600 }}>Select a table above to verify real-time filtering</div>
+                            <p style={{ fontSize: "14px", marginTop: "8px" }}>We'll simulate the query with this user's active RLAC policies.</p>
                         </div>
-                    ) : (
-                        <div style={{ border: "1px solid #e2e8f0", borderRadius: "12px", overflow: "hidden" }}>
-                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
-                                <thead style={{ background: "#f8fafc" }}>
-                                    <tr>
-                                        {data.columns?.map(c => (
-                                            <th key={c.name} style={{ padding: "12px 16px", textAlign: "left", color: "#64748b", fontWeight: 700, textTransform: "uppercase", fontSize: "10px", borderBottom: "1px solid #e2e8f0" }}>{c.name}</th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {data.data_array.map((row, i) => (
-                                        <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                                            {row.map((cell, j) => (
-                                                <td key={j} style={{ padding: "12px 16px", color: "#334155" }}>
-                                                    {String(cell)}
-                                                </td>
-                                            ))}
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                            <div style={{ padding: "12px 16px", background: "#f0fdf4", borderTop: "1px solid #bbf7d0", color: "#166534", fontSize: "11px", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px" }}>
-                                <span style={{ width: 6, height: 6, background: "#22c55e", borderRadius: "50%" }} />
-                                Showing top {data.data_array.length} results filtered by RLAC Policies.
-                            </div>
+                    )}
+
+                    {loadingData && (
+                        <div style={{ textAlign: "center", padding: "80px 0", color: "#64748b" }}>
+                            <div style={{ width: "40px", height: "40px", border: "4px solid #f1f5f9", borderTopColor: "#2563eb", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 20px" }}></div>
+                            <div style={{ fontSize: "16px", fontWeight: 600 }}>Fetching live preview...</div>
                         </div>
+                    )}
+
+                    {data && !loadingData && (
+                        <>
+                            {(data.data_array || []).length === 0 ? (
+                                <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                                    <div style={{ textAlign: "center", padding: "60px 40px", background: "#fef2f2", borderRadius: "20px", border: "1px dashed #fecaca" }}>
+                                        <div style={{ fontSize: "32px", marginBottom: "16px" }}>🚫</div>
+                                        <div style={{ fontWeight: 800, color: "#991b1b", fontSize: "18px" }}>No Data Matches Filter</div>
+                                        <p style={{ fontSize: "14px", color: "#b91c1c", marginTop: "8px", maxWidth: "400px", margin: "8px auto" }}>The security policy correctly filtered out all rows from this table for the simulated user.</p>
+                                    </div>
+                                    
+                                    {data.appliedFilters && data.appliedFilters.length > 0 && (
+                                        <div style={{ padding: "20px", background: "#f8fafc", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
+                                            <div style={{ fontSize: "12px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                                                Active Security Filters
+                                            </div>
+                                            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                                                {data.appliedFilters.map((f, i) => (
+                                                    <code key={i} style={{ background: "#fff", border: "1px solid #cbd5e1", padding: "4px 10px", borderRadius: "6px", fontSize: "12px", color: "#1e293b", fontWeight: 600 }}>{f}</code>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div style={{ border: "1px solid #e2e8f0", borderRadius: "16px", overflow: "hidden", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05)" }}>
+                                    <div style={{ overflowX: "auto" }}>
+                                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                                            <thead style={{ background: "#f8fafc" }}>
+                                                <tr>
+                                                    {(data.columns || []).map(c => (
+                                                        <th key={c.name} style={{ padding: "14px 20px", textAlign: "left", color: "#64748b", fontWeight: 700, textTransform: "uppercase", fontSize: "11px", letterSpacing: "0.05em", borderBottom: "1px solid #e2e8f0" }}>{c.name}</th>
+                                                    ))}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {(data.data_array || []).map((row, i) => (
+                                                    <tr key={i} style={{ borderBottom: "1px solid #f1f5f9", background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                                                        {(Array.isArray(row) ? row : []).map((cell, j) => (
+                                                            <td key={j} style={{ padding: "14px 20px", color: "#334155", fontWeight: 500 }}>
+                                                                {cell === null ? <span style={{ color: "#cbd5e1", fontStyle: "italic" }}>null</span> : String(cell)}
+                                                            </td>
+                                                        ))}
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    
+                                    <div style={{ padding: "16px 24px", background: "#f0fdf4", borderTop: "1px solid #bbf7d0", color: "#166534", fontSize: "13px", fontWeight: 600, display: "flex", alignItems: "center", gap: "10px" }}>
+                                        <span style={{ width: 8, height: 8, background: "#22c55e", borderRadius: "50%", boxShadow: "0 0 0 4px rgba(34,197,94,0.15)" }} />
+                                        Showing {(data.data_array || []).length} result{(data.data_array || []).length !== 1 ? 's' : ' '} filtered by RLAC Policies.
+                                    </div>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             </div>
         </div>
     );
 }
-
 
 // ─── TAB 1: Grant Access ───────────────────────────────────────────────────────
 function GrantAccessTab({ showToast }) {
@@ -349,7 +391,7 @@ function GrantAccessTab({ showToast }) {
                             </div>
                         </div>
                         <datalist id="user-suggestions">
-                            {availableUsers.map(u => <option key={u} value={u} />)}
+                            {(availableUsers || []).map(u => <option key={u} value={u} />)}
                         </datalist>
                     </div>
 
@@ -357,7 +399,7 @@ function GrantAccessTab({ showToast }) {
                         <label style={labelStyle}>Catalog</label>
                         <select value={form.catalog} onChange={e => setForm({ ...form, catalog: e.target.value })} disabled={loadingCatalogs || submitting} style={{ ...inputStyle, height: "42px" }}>
                             <option value="">{loadingCatalogs ? "Loading..." : "Select catalog"}</option>
-                            {catalogs.map(c => <option key={c} value={c}>{c}</option>)}
+                            {(catalogs || []).map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                     </div>
 
@@ -365,7 +407,7 @@ function GrantAccessTab({ showToast }) {
                         <label style={labelStyle}>Schema</label>
                         <select value={form.schema} onChange={e => setForm({ ...form, schema: e.target.value })} disabled={!form.catalog || loadingSchemas || submitting} style={{ ...inputStyle, height: "42px" }}>
                             <option value="">{!form.catalog ? "Select catalog first" : loadingSchemas ? "Loading..." : "Select schema"}</option>
-                            {schemas.map(s => <option key={s} value={s}>{s}</option>)}
+                            {(schemas || []).map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
 
@@ -373,7 +415,7 @@ function GrantAccessTab({ showToast }) {
                         <label style={labelStyle}>Table</label>
                         <select value={form.table} onChange={e => setForm({ ...form, table: e.target.value })} disabled={!form.schema || loadingTables || submitting} style={{ ...inputStyle, height: "42px" }}>
                             <option value="">{!form.schema ? "Select schema first" : loadingTables ? "Loading..." : "Select table"}</option>
-                            {tables.map(t => <option key={t} value={t}>{t}</option>)}
+                            {(tables || []).map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
                     </div>
 
@@ -632,8 +674,8 @@ function RLACTab({ showToast }) {
                             <input style={inputStyle} placeholder="user@email.com or group-name" value={form.principalName} onChange={e => setForm({ ...form, principalName: e.target.value })} list="rlac-principal-suggestions" />
                             <datalist id="rlac-principal-suggestions">
                                 {form.principalType === "USER"
-                                    ? availableUsers.map(u => <option key={u} value={u} />)
-                                    : availableGroups.map(g => <option key={g} value={g} />)
+                                    ? (availableUsers || []).map(u => <option key={u} value={u} />)
+                                    : (availableGroups || []).map(g => <option key={g} value={g} />)
                                 }
                             </datalist>
                         </div>

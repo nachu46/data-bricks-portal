@@ -261,7 +261,7 @@ router.get("/preview-data", requireAdmin, async (req, res) => {
   }
   try {
     const data = await db.getFilteredTableData(email, catalog, schema, table);
-    res.json(data);
+    res.json({ ...data, appliedFilters: data.appliedFilters || [] });
   } catch (err) {
     console.error("❌ preview-data error:", err.message);
     res.status(500).json({ error: err.message });
@@ -276,6 +276,21 @@ router.post("/deploy-view", requireAdmin, async (req, res) => {
   }
   try {
     const result = await db.deploySecuredView(catalog, schema, table);
+    
+    // Log to audit history
+    const adminEmail = req.user.email;
+    const fullTableName = `${catalog}.${schema}.${table}`;
+    await db.insertAuditLog(
+      "DEPLOY_SECURED_VIEW", 
+      "SYSTEM", 
+      fullTableName, 
+      adminEmail, 
+      catalog, 
+      schema, 
+      `DEPLOY|${catalog}|${schema}|${table}`,
+      "VIEW_CREATED"
+    );
+
     res.json({ success: true, ...result });
   } catch (err) {
     console.error("❌ deploy-view error:", err.message);
