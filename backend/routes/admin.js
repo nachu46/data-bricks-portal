@@ -199,11 +199,7 @@ router.get("/live-grants", requireAdmin, async (req, res) => {
     let portalMap = new Map(); // key -> metadata object
     let inactivePolicies = [];
     try {
-      const portalResult = await db.executeSQL(`
-        SELECT LOWER(principal_name), LOWER(catalog_name), LOWER(schema_name), LOWER(table_pattern), created_at, is_active, revoked_at, revoked_by, privilege
-        FROM workspace.governance.access_policies
-      `);
-      const portalRows = portalResult?.result?.data_array || [];
+      const portalRows = await db.getPortalMetadata();
       portalRows.forEach(r => {
         // key: principal|catalog|schema|table
         const key = `${r[0]}|${r[1]}|${r[2]}|${r[3]}`.toLowerCase();
@@ -254,6 +250,36 @@ router.get("/live-grants", requireAdmin, async (req, res) => {
   } catch (err) {
     console.error("❌ Live grants error:", err.message);
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/admin/preview-data?email=...&catalog=...&schema=...&table=...
+router.get("/preview-data", requireAdmin, async (req, res) => {
+  const { email, catalog, schema, table } = req.query;
+  if (!email || !catalog || !schema || !table) {
+    return res.status(400).json({ error: "Missing required parameters: email, catalog, schema, table" });
+  }
+  try {
+    const data = await db.getFilteredTableData(email, catalog, schema, table);
+    res.json(data);
+  } catch (err) {
+    console.error("❌ preview-data error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/deploy-view
+router.post("/deploy-view", requireAdmin, async (req, res) => {
+  const { catalog, schema, table } = req.body;
+  if (!catalog || !schema || !table) {
+    return res.status(400).json({ error: "Missing required parameters: catalog, schema, table" });
+  }
+  try {
+    const result = await db.deploySecuredView(catalog, schema, table);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error("❌ deploy-view error:", err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 

@@ -116,18 +116,23 @@ function DataAccess() {
               </thead>
               <tbody>
                 {dataAccess.map((item, index) => {
-                  // getMyAccess returns: [catalog_name, schema_name, table_pattern, privilege]
                   const catalog = item[0];
                   const schema = item[1];
                   const table = item[2];
                   const privilege = item[3];
-                  const active = true; // is_active filter applied in SQL (WHERE is_active = true)
+                  const isSecured = item[4]; // New field from backend
+                  const active = true;
+
+                  const displayTable = isSecured ? `secured_${table}` : table;
 
                   return (
                     <tr key={index}>
                       <td className="mono">{catalog}</td>
                       <td className="mono">{schema}</td>
-                      <td className="mono">{table}</td>
+                      <td className="mono">
+                        {table} 
+                        {isSecured && <span title="Protected by RLAC" style={{ marginLeft: "8px", color: "#10b981", fontSize: "16px" }}>🛡️</span>}
+                      </td>
                       <td>{privilege}</td>
                       <td>
                         <span className={`status-badge status-${active ? 'granted' : 'disabled'}`}>
@@ -138,9 +143,10 @@ function DataAccess() {
                         {active && (
                           <button
                             className="open-btn-white"
-                            onClick={() => openTable(catalog, schema, table)}
+                            onClick={() => openTable(catalog, schema, displayTable)}
+                            style={isSecured ? { background: "linear-gradient(135deg, #10b981, #059669)", color: "#fff" } : {}}
                           >
-                            Open Data →
+                            {isSecured ? "Open Secured Data →" : "Open Data →"}
                           </button>
                         )}
                       </td>

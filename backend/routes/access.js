@@ -6,6 +6,19 @@ const db = require("../services/databricksService");
 const { requireAdmin } = require("../middleware/auth");
 
 /**
+ * USER ACCESS
+ */
+router.get("/my-access/:email", async (req, res) => {
+  try {
+    const result = await db.getMyAccess(req.params.email);
+    res.json({ success: true, result: { data_array: result } });
+  } catch (err) {
+    console.error("❌ my-access error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * CATALOG BROWSING (Keep for Admin Panel dropdowns)
  */
 

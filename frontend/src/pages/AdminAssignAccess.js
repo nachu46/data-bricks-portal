@@ -26,6 +26,156 @@ const fmtTs = (ts) => {
     try { return new Date(ts).toLocaleString(); } catch { return ts; }
 };
 
+// ─── COMPONENT: Preview Modal ────────────────────────────────────────────────
+function PreviewModal({ isOpen, onClose, principalName, showToast }) {
+    const [catalogs, setCatalogs] = useState([]);
+    const [schemas, setSchemas] = useState([]);
+    const [tables, setTables] = useState([]);
+    const [selection, setSelection] = useState({ catalog: "", schema: "", table: "" });
+    const [loadingOpt, setLoadingOpt] = useState(false);
+    const [data, setData] = useState(null);
+    const [loadingData, setLoadingData] = useState(false);
+    const [deploying, setDeploying] = useState(false);
+
+    useEffect(() => {
+        if (!isOpen) {
+            setData(null);
+            setSelection({ catalog: "", schema: "", table: "" });
+            return;
+        }
+        setLoadingOpt(true);
+        api.get("/access/catalogs", { headers: adminHeaders() })
+            .then(r => setCatalogs(r.data?.catalogs || []))
+            .catch(() => showToast("Failed to load catalogs", "error"))
+            .finally(() => setLoadingOpt(false));
+    }, [isOpen, showToast]);
+
+    useEffect(() => {
+        if (!selection.catalog) { setSchemas([]); return; }
+        api.get(`/access/schemas/${selection.catalog}`, { headers: adminHeaders() })
+            .then(r => setSchemas(r.data?.schemas || []));
+    }, [selection.catalog]);
+
+    useEffect(() => {
+        if (!selection.schema) { setTables([]); return; }
+        api.get(`/access/tables/${selection.catalog}/${selection.schema}`, { headers: adminHeaders() })
+            .then(r => setTables(r.data?.tables || []));
+    }, [selection.catalog, selection.schema]);
+
+    const runPreview = async () => {
+        if (!selection.table) return;
+        setLoadingData(true);
+        try {
+            const res = await api.get("/admin/preview-data", {
+                params: { email: principalName, ...selection },
+                headers: adminHeaders()
+            });
+            setData(res.data?.result || { data_array: [], columns: [] });
+        } catch (err) {
+            showToast(err.response?.data?.error || "Preview failed", "error");
+        } finally { setLoadingData(false); }
+    };
+
+    const handleDeploy = async () => {
+        if (!selection.table) return;
+        setDeploying(true);
+        try {
+            const res = await api.post("/admin/deploy-view", selection, { headers: adminHeaders() });
+            showToast(`Success! Secured view created: ${res.data.viewName}`, "success");
+        } catch (err) {
+            showToast(err.response?.data?.error || "Deployment failed", "error");
+        } finally { setDeploying(false); }
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "20px" }}>
+            <div style={{ background: "#fff", width: "100%", maxWidth: "900px", maxHeight: "90vh", borderRadius: "18px", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column", overflow: "hidden", animation: "fadeIn 0.2s ease-out" }}>
+                <div style={{ padding: "24px 32px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                        <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 800, color: "#0f172a" }}>RLAC Data Preview</h2>
+                        <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#64748b" }}>Simulating view for: <strong>{principalName}</strong></p>
+                    </div>
+                    <button onClick={onClose} style={{ background: "#f1f5f9", border: "none", width: "32px", height: "32px", borderRadius: "10px", cursor: "pointer", color: "#64748b", fontWeight: 800 }}>×</button>
+                </div>
+
+                <div style={{ padding: "24px 32px", background: "#f8fafc", borderBottom: "1px solid #f1f5f9", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", alignItems: "flex-end" }}>
+                    <div>
+                        <label style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", display: "block", marginBottom: "6px" }}>Catalog</label>
+                        <select value={selection.catalog} onChange={e => setSelection({ ...selection, catalog: e.target.value, schema: "", table: "" })} style={{ width: "100%", padding: "8px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                            <option value="">Select Catalog</option>
+                            {catalogs.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", display: "block", marginBottom: "6px" }}>Schema</label>
+                        <select value={selection.schema} onChange={e => setSelection({ ...selection, schema: e.target.value, table: "" })} disabled={!selection.catalog} style={{ width: "100%", padding: "8px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                            <option value="">Select Schema</option>
+                            {schemas.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", display: "block", marginBottom: "6px" }}>Table</label>
+                        <select value={selection.table} onChange={e => setSelection({ ...selection, table: e.target.value })} disabled={!selection.schema} style={{ width: "100%", padding: "8px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                            <option value="">Select Table</option>
+                            {tables.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                    </div>
+                    <button onClick={runPreview} disabled={!selection.table || loadingData} style={{ background: "linear-gradient(135deg, #3b82f6, #1d4ed8)", color: "#fff", border: "none", borderRadius: "8px", padding: "10px 20px", fontWeight: 700, fontSize: "13px", cursor: "pointer", boxShadow: "0 4px 12px rgba(59,130,246,0.3)" }}>
+                        {loadingData ? "Running..." : "Preview Data"}
+                    </button>
+                    <button onClick={handleDeploy} disabled={!selection.table || deploying} style={{ background: "linear-gradient(135deg, #10b981, #059669)", color: "#fff", border: "none", borderRadius: "8px", padding: "10px 20px", fontWeight: 700, fontSize: "13px", cursor: "pointer", boxShadow: "0 4px 12px rgba(16,185,129,0.3)" }}>
+                        {deploying ? "Deploying..." : "🚀 Enforce in Databricks"}
+                    </button>
+                </div>
+
+                <div style={{ flex: 1, overflow: "auto", padding: "32px" }}>
+                    {!data ? (
+                        <div style={{ textAlign: "center", color: "#94a3b8", padding: "60px 0" }}>
+                            <div style={{ fontSize: "40px", marginBottom: "16px" }}>🔍</div>
+                            <div style={{ fontWeight: 600 }}>Select a table above to verify real-time filtering</div>
+                        </div>
+                    ) : data.data_array?.length === 0 ? (
+                        <div style={{ textAlign: "center", color: "#ef4444", padding: "40px" }}>
+                            <div style={{ fontSize: "24px", marginBottom: "12px" }}>⚠️</div>
+                            <div style={{ fontWeight: 700 }}>No rows found matching this user's filters!</div>
+                            <p style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}>The security policy correctly filtered out all data from this table.</p>
+                        </div>
+                    ) : (
+                        <div style={{ border: "1px solid #e2e8f0", borderRadius: "12px", overflow: "hidden" }}>
+                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                                <thead style={{ background: "#f8fafc" }}>
+                                    <tr>
+                                        {data.columns?.map(c => (
+                                            <th key={c.name} style={{ padding: "12px 16px", textAlign: "left", color: "#64748b", fontWeight: 700, textTransform: "uppercase", fontSize: "10px", borderBottom: "1px solid #e2e8f0" }}>{c.name}</th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {data.data_array.map((row, i) => (
+                                        <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                                            {row.map((cell, j) => (
+                                                <td key={j} style={{ padding: "12px 16px", color: "#334155" }}>
+                                                    {String(cell)}
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            <div style={{ padding: "12px 16px", background: "#f0fdf4", borderTop: "1px solid #bbf7d0", color: "#166534", fontSize: "11px", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px" }}>
+                                <span style={{ width: 6, height: 6, background: "#22c55e", borderRadius: "50%" }} />
+                                Showing top {data.data_array.length} results filtered by RLAC Policies.
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 
 // ─── TAB 1: Grant Access ───────────────────────────────────────────────────────
 function GrantAccessTab({ showToast }) {
@@ -367,6 +517,7 @@ function RLACTab({ showToast }) {
     const [search, setSearch] = useState("");
     const [availableUsers, setAvailableUsers] = useState([]);
     const [availableGroups, setAvailableGroups] = useState([]);
+    const [previewUser, setPreviewUser] = useState(null);
 
     const load = async () => {
         setLoading(true);
@@ -401,7 +552,7 @@ function RLACTab({ showToast }) {
         setSaving(true);
         try {
             await api.post("/access/rlac-policies", form, { headers: adminHeaders() });
-            showToast(editMode ? "Policy updated" : "Policy created");
+            showToast(editMode ? "Policy updated" : "Policy created", "success");
             setForm(EMPTY_RLAC); setEditMode(false);
             load();
         } catch (err) {
@@ -460,6 +611,7 @@ function RLACTab({ showToast }) {
     return (
         <>
             <ConfirmModal isOpen={!!confirmModal} {...confirmModal} onCancel={() => setConfirmModal(null)} isDestructive={true} confirmText="Delete Policy" />
+            <PreviewModal isOpen={!!previewUser} onClose={() => setPreviewUser(null)} principalName={previewUser} showToast={showToast} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "24px", marginTop: 24, alignItems: "start" }}>
 
                 {/* Add / Edit Form */}
@@ -558,6 +710,7 @@ function RLACTab({ showToast }) {
                                             <td style={{ padding: "14px 16px" }}>
                                                 <div style={{ display: "flex", gap: "8px" }}>
                                                     <button onClick={() => edit(row)} style={{ padding: "4px 12px", background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0", borderRadius: "6px", cursor: "pointer", fontSize: "11px", fontWeight: 700 }}>Edit</button>
+                                                    <button onClick={() => setPreviewUser(row[1])} style={{ padding: "4px 12px", background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", borderRadius: "6px", cursor: "pointer", fontSize: "11px", fontWeight: 700 }}>Preview</button>
                                                     <button onClick={() => del(row)} style={{ padding: "4px 12px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: "6px", cursor: "pointer", fontSize: "11px", fontWeight: 700 }}>Delete</button>
                                                 </div>
                                             </td>
