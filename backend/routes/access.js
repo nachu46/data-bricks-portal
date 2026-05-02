@@ -147,7 +147,16 @@ router.post("/rlac-policies", requireAdmin, async (req, res) => {
   if (!principalType || !principalName)
     return res.status(400).json({ error: "principalType and principalName are required" });
   try {
+    const adminEmail = req.user.email;
     await db.upsertRLACPolicy({ principalType, principalName, groupcode, clustercode, companycode, plantcode, isActive });
+    
+    // Log to audit history
+    await db.insertAuditLog(
+      "UPSERT_RLAC_POLICY", principalName, `RLAC:${principalType}`, 
+      adminEmail, "SYSTEM", "RLAC", `RLAC|${principalName}`, 
+      JSON.stringify({ groupcode, clustercode, companycode, plantcode, isActive })
+    );
+
     res.json({ success: true, message: "RLAC policy saved" });
   } catch (err) {
     console.error("❌ rlac-policies POST:", err.message);
@@ -160,7 +169,16 @@ router.delete("/rlac-policies", requireAdmin, async (req, res) => {
   if (!principalType || !principalName)
     return res.status(400).json({ error: "principalType and principalName are required" });
   try {
+    const adminEmail = req.user.email;
     await db.deleteRLACPolicy(principalType, principalName);
+
+    // Log to audit history
+    await db.insertAuditLog(
+      "DELETE_RLAC_POLICY", principalName, `RLAC:${principalType}`, 
+      adminEmail, "SYSTEM", "RLAC", `RLAC|${principalName}`, 
+      "DELETED"
+    );
+
     res.json({ success: true, message: "RLAC policy deleted" });
   } catch (err) {
     console.error("❌ rlac-policies DELETE:", err.message);
