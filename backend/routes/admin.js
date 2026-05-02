@@ -81,7 +81,7 @@ router.post("/grant-access", requireAdmin, async (req, res) => {
     await db.insertAuditLog("GRANT", user, tableName, adminEmail, catalog, schema, policyId, "SELECT");
 
     // 3. Trigger Email (Non-blocking)
-    sendAccessNotification(user, "GRANT", tableName).catch(err => {
+    sendAccessNotification(user, "GRANT", catalog, schema, table).catch(err => {
       console.error("❌ Background email failed:", err.message);
     });
 
@@ -116,7 +116,7 @@ router.post("/revoke-access", requireAdmin, async (req, res) => {
     await db.insertAuditLog("REVOKE", user, tableName, adminEmail, catalog, schema, policyId, null);
 
     // 3. Trigger Email (Non-blocking)
-    sendAccessNotification(user, "REVOKE", tableName).catch(err => {
+    sendAccessNotification(user, "REVOKE", catalog, schema, table).catch(err => {
       console.error("❌ Background email failed:", err.message);
     });
 
@@ -280,6 +280,9 @@ router.post("/deploy-view", requireAdmin, async (req, res) => {
     // Log to audit history
     const adminEmail = req.user.email;
     const fullTableName = `${catalog}.${schema}.${table}`;
+    const viewName = result.viewName; // e.g. secured_table
+    const [vCat, vSch, vTbl] = viewName.split(".");
+
     await db.insertAuditLog(
       "DEPLOY_SECURED_VIEW", 
       "SYSTEM", 
@@ -291,7 +294,11 @@ router.post("/deploy-view", requireAdmin, async (req, res) => {
       "VIEW_CREATED"
     );
 
-    res.json({ success: true, ...result });
+    // Generate Direct URL
+    const host = (process.env.DATABRICKS_HOST || "").replace(/\/$/, "");
+    const directUrl = `${host}/explore/data/${vCat}/${vSch}/${vTbl}`;
+
+    res.json({ success: true, ...result, directUrl });
   } catch (err) {
     console.error("❌ deploy-view error:", err.message);
     res.status(500).json({ error: err.message });

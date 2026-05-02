@@ -6,17 +6,19 @@ const HOST = process.env.DATABRICKS_HOST;
 const TOKEN = process.env.DATABRICKS_TOKEN;
 const WAREHOUSE_ID = process.env.WAREHOUSE_ID || process.env.DATABRICKS_WAREHOUSE_ID;
 
-// Metadata Table Config (from .env)
-const ROOT_CATALOG = process.env.ROOT_CATALOG || "biztraz_dev";
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIGURATION & DEFAULTS
+// ─────────────────────────────────────────────────────────────────────────────
+const ROOT_CATALOG = process.env.ROOT_CATALOG || "main";
 const META_CATALOG = process.env.METADATA_CATALOG || "workspace";
 
-// Automatic Table Mapping (Smart Discovery)
-const POLICY_TABLE  = `${META_CATALOG}.governance.access_policies`;
-const RLAC_TABLE    = `${ROOT_CATALOG}.bronze.data_access_policy`;
-const AUDIT_TABLE   = `${META_CATALOG}.governance.audit_logs`;
-const USER_TABLE    = `${META_CATALOG}.governance.users`;
-const CONTROL_TABLE = `${ROOT_CATALOG}.bronze.user_access_control`;
-const GOV_CATALOG   = `${META_CATALOG}.governance`;
+// Governance Metadata Tables
+const POLICY_TABLE = `${META_CATALOG}.governance.access_policies`;
+const RLAC_TABLE = `${META_CATALOG}.governance.rlac_policies`;
+const AUDIT_TABLE = `${META_CATALOG}.governance.audit_logs`;
+const USER_TABLE = `${META_CATALOG}.governance.users`;
+const CONTROL_TABLE = `${META_CATALOG}.governance.user_access_control`;
+const GOV_CATALOG = `${META_CATALOG}.governance`;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CORE: escape a value for safe SQL string injection
@@ -109,7 +111,7 @@ async function fetchRows(sql) {
 async function loginUser(email, password) {
   return executeSQL(`
     SELECT email, password, role
-    FROM workspace.governance.users
+    FROM ${USER_TABLE}
     WHERE email = ${esc(email)} AND password = ${esc(password)}
   `);
 }
@@ -119,7 +121,7 @@ async function loginUser(email, password) {
 // ─────────────────────────────────────────────────────────────────────────────
 async function registerUser(email, password, role) {
   return executeSQL(`
-    INSERT INTO workspace.governance.users (email, password, role)
+    INSERT INTO ${USER_TABLE} (email, password, role)
     VALUES (${esc(email)}, ${esc(password)}, ${esc(role)})
   `);
 }
@@ -130,8 +132,8 @@ async function registerUser(email, password, role) {
 async function getAllUsers() {
   return executeSQL(`
     SELECT u.email, u.role, MAX(p.department) AS department
-    FROM workspace.governance.users u
-    LEFT JOIN workspace.governance.access_policies p
+    FROM ${USER_TABLE} u
+    LEFT JOIN ${POLICY_TABLE} p
       ON u.email = p.principal_name AND p.principal_type = 'USER'
     GROUP BY u.email, u.role
     ORDER BY u.email
@@ -143,7 +145,7 @@ async function getAllUsers() {
 // ─────────────────────────────────────────────────────────────────────────────
 async function updateUserRole(email, role) {
   return executeSQL(`
-    UPDATE workspace.governance.users
+    UPDATE ${USER_TABLE}
     SET role = ${esc(role)}
     WHERE email = ${esc(email)}
   `);
@@ -154,7 +156,7 @@ async function updateUserRole(email, role) {
 // ─────────────────────────────────────────────────────────────────────────────
 async function updateUserDepartment(email, department) {
   return executeSQL(`
-    UPDATE workspace.governance.access_policies
+    UPDATE ${POLICY_TABLE}
     SET department = ${esc(department)}
     WHERE principal_name = ${esc(email)}
       AND principal_type = 'USER'
@@ -166,12 +168,12 @@ async function updateUserDepartment(email, department) {
 // ─────────────────────────────────────────────────────────────────────────────
 async function deleteUser(email) {
   await executeSQL(`
-    DELETE FROM workspace.governance.access_policies
+    DELETE FROM ${POLICY_TABLE}
     WHERE principal_name = ${esc(email)}
       AND principal_type = 'USER'
   `);
   return executeSQL(`
-    DELETE FROM workspace.governance.users
+    DELETE FROM ${USER_TABLE}
     WHERE email = ${esc(email)}
   `);
 }
@@ -183,7 +185,7 @@ async function getUserDepartment(email) {
   try {
     const rows = await fetchRows(`
       SELECT department
-      FROM workspace.governance.access_policies
+      FROM ${POLICY_TABLE}
       WHERE principal_name = ${esc(email)}
         AND principal_type = 'USER'
       LIMIT 1
@@ -221,7 +223,7 @@ async function getUserResources(email) {
 // ─────────────────────────────────────────────────────────────────────────────
 async function submitAccessRequest(user, catalog, schema, table, access) {
   return executeSQL(`
-    INSERT INTO workspace.governance.user_requests (user, catalog_name, schema_name, table_name, access_type, status, requested_at)
+    INSERT INTO ${META_CATALOG}.governance.user_requests (user, catalog_name, schema_name, table_name, access_type, status, requested_at)
     VALUES (${esc(user)}, ${esc(catalog)}, ${esc(schema)}, ${esc(table)}, ${esc(access)}, 'PENDING', current_timestamp())
   `);
 }
@@ -232,7 +234,7 @@ async function submitAccessRequest(user, catalog, schema, table, access) {
 async function getMyRequests(email) {
   return executeSQL(`
     SELECT catalog, schema, \`table\`, access, status
-    FROM workspace.governance.user_requests
+    FROM ${META_CATALOG}.governance.user_requests
     WHERE user = ${esc(email)}
     ORDER BY created_at DESC
   `);
@@ -243,7 +245,7 @@ async function getMyRequests(email) {
 // ─────────────────────────────────────────────────────────────────────────────
 async function getPendingRequests() {
   return executeSQL(`
-    SELECT * FROM workspace.governance.user_requests
+    SELECT * FROM ${META_CATALOG}.governance.user_requests
     WHERE status = 'PENDING'
   `);
 }
@@ -253,7 +255,7 @@ async function getPendingRequests() {
 // ─────────────────────────────────────────────────────────────────────────────
 async function approveRequest(user, table) {
   return executeSQL(`
-    UPDATE workspace.governance.user_requests
+    UPDATE ${META_CATALOG}.governance.user_requests
     SET status = 'APPROVED'
     WHERE user = ${esc(user)} AND \`table\` = ${esc(table)}
   `);
@@ -264,7 +266,7 @@ async function approveRequest(user, table) {
 // ─────────────────────────────────────────────────────────────────────────────
 async function rejectRequest(user, table) {
   return executeSQL(`
-    UPDATE workspace.governance.user_requests
+    UPDATE ${META_CATALOG}.governance.user_requests
     SET status = 'REJECTED'
     WHERE user = ${esc(user)} AND \`table\` = ${esc(table)}
   `);
@@ -276,7 +278,7 @@ async function rejectRequest(user, table) {
 async function getAllPolicies() {
   return executeSQL(`
     SELECT principal_name AS user_email, catalog_name, schema_name, table_pattern, privilege, is_active
-    FROM workspace.governance.access_policies
+    FROM ${POLICY_TABLE}
     WHERE principal_type = 'USER'
     ORDER BY principal_name
   `);
@@ -302,7 +304,7 @@ async function getAllPoliciesEnriched() {
         created_at                                                    AS created_time,
         revoked_at                                                    AS revoked_time,
         revoked_by
-      FROM workspace.governance.access_policies
+      FROM ${POLICY_TABLE}
       WHERE principal_type = 'USER'
       ORDER BY created_at DESC
     `);
@@ -320,7 +322,7 @@ async function getAllPoliciesEnriched() {
 async function getMyAccess(email) {
   const rows = await fetchRows(`
     SELECT catalog_name, schema_name, table_pattern, privilege
-    FROM workspace.governance.access_policies
+    FROM ${POLICY_TABLE}
     WHERE principal_name = ${esc(email)}
       AND principal_type = 'USER'
       AND is_active = true
@@ -369,7 +371,7 @@ const deletePolicy = revokePolicy;
 // ─────────────────────────────────────────────────────────────────────────────
 async function togglePolicy(email, schema, table, active) {
   return executeSQL(`
-    UPDATE workspace.governance.access_policies
+    UPDATE ${POLICY_TABLE}
     SET is_active = ${active ? "true" : "false"}
     WHERE principal_name = ${esc(email)}
       AND principal_type = 'USER'
@@ -384,7 +386,7 @@ async function togglePolicy(email, schema, table, active) {
 async function verifyTableAccess(email, table) {
   const rows = await fetchRows(`
     SELECT COUNT(*) as cnt
-    FROM workspace.governance.access_policies
+    FROM ${POLICY_TABLE}
     WHERE principal_name = ${esc(email)}
       AND principal_type = 'USER'
       AND table_pattern  = ${esc(table)}
@@ -568,7 +570,7 @@ async function revokeDirectAccess(email, catalog, schema, table, privilege = "SE
 }
 
 /**
- * AUDIT LOGGING: Insert record into workspace.governance.audit_logs
+ * AUDIT LOGGING: Insert record into ${AUDIT_TABLE}
  * Schema: action_type, target_user, table_name, created_at
  */
 async function insertAuditLog(action, userEmail, tableName, executedBy, catalog, schema, policyId = null, privileges = null) {
@@ -759,11 +761,11 @@ async function deleteRLACPolicy(principalType, principalName) {
   if (principalType === 'USER') {
     console.log(`[RLAC Cleanup] Removing user ${principalName} from Access Control Table`);
     await executeSQL(`
-      DELETE FROM biztraz_dev.bronze.user_access_control
+      DELETE FROM ${CONTROL_TABLE}
       WHERE user_email = ${esc(principalName)}
     `);
   }
-  
+
   return { success: true };
 }
 
@@ -892,7 +894,7 @@ module.exports = {
     }
 
     const [ptype, pname, gcode, ccode, compcode, pcode] = policies[0];
-    
+
     // 2. Build the WHERE clause based on non-empty policy fields
     const safeTable = `${sanitizeId(catalog)}.${sanitizeId(schema)}.${sanitizeId(table)}`;
 
@@ -911,7 +913,7 @@ module.exports = {
       // Try exact, then underscore version, then _id version
       const underscoreVersion = policyKey.replace(/code$/, "_code");
       const idVersion = policyKey.replace(/code$/, "_id");
-      
+
       if (columns.includes(policyKey.toLowerCase())) {
         filters.push(`${policyKey} = ${esc(value)}`);
       } else if (columns.includes(underscoreVersion.toLowerCase())) {
@@ -930,7 +932,7 @@ module.exports = {
     tryFilter("plantcode", pcode);
 
     const whereClause = filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : "";
-    
+
     // 3. Execute the filtered query
     const sql = `SELECT * FROM ${safeTable} ${whereClause} LIMIT 10`;
     console.log(`[RLAC Preview] Executing: ${sql}`);

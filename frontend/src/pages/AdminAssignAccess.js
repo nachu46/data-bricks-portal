@@ -81,7 +81,14 @@ function PreviewModal({ isOpen, onClose, principalName, showToast }) {
         setDeploying(true);
         try {
             const res = await api.post("/admin/deploy-view", selection, { headers: adminHeaders() });
-            showToast(`Success! Secured view created: ${res.data.viewName}`, "success");
+            const directUrl = res.data.directUrl;
+            showToast(
+                <span>
+                    Success! Secured view created: <strong>{res.data.viewName}</strong>. 
+                    <a href={directUrl} target="_blank" rel="noreferrer" style={{ marginLeft: "10px", color: "#fff", textDecoration: "underline", fontWeight: 700 }}>Open in Databricks</a>
+                </span>, 
+                "success"
+            );
         } catch (err) {
             showToast(err.response?.data?.error || "Deployment failed", "error");
         } finally { setDeploying(false); }
