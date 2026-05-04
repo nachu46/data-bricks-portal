@@ -80,7 +80,8 @@ const SUBTITLES = {
  *   -> "User 't@gmail.com' was not found in Databricks."
  */
 const translateErrorMessage = (raw) => {
-  if (!raw || typeof raw !== "string") return { title: "Something went wrong", subtitle: "" };
+  if (!raw) return { title: "Something went wrong", subtitle: "" };
+  if (typeof raw !== "string") return { title: raw, subtitle: "" };
 
   // 1. Detect Databricks-style bracketed errors
   const errorClassMatch = raw.match(/ErrorClass=([\w.]+)/);
@@ -150,7 +151,7 @@ export function Toast({ toast, onClose }) {
   const rawContent = toast.title || toast.message || "Something went wrong";
   const { title: translatedTitle, subtitle: translatedSubtitle } = translateErrorMessage(rawContent);
 
-  const title = toast.title && !toast.title.includes("ErrorClass") ? toast.title : translatedTitle;
+  const title = translatedTitle;
   const subtitle = toast.subtitle || translatedSubtitle || SUBTITLES[title] || (type === "error" ? "Something went wrong. Please try again or refresh the page." : "");
 
   return (
@@ -245,7 +246,7 @@ export function useToast(autoDismissMs = 4500) {
   const [toast, setToast] = useState(null);
   const timerRef = React.useRef(null);
 
-  const showToast = (title, subtitleOrType = "", type = "error") => {
+  const showToast = React.useCallback((title, subtitleOrType = "", type = "error") => {
     // Support overloaded call: showToast(msg, type) OR showToast(msg, subtitle, type)
     let subtitle = "";
     let resolvedType = type;
@@ -266,12 +267,12 @@ export function useToast(autoDismissMs = 4500) {
     if (autoDismissMs > 0) {
       timerRef.current = setTimeout(() => setToast(null), autoDismissMs);
     }
-  };
+  }, [autoDismissMs]);
 
-  const closeToast = () => {
+  const closeToast = React.useCallback(() => {
     clearTimeout(timerRef.current);
     setToast(null);
-  };
+  }, []);
 
   const ToastComponent = <Toast toast={toast} onClose={closeToast} />;
 

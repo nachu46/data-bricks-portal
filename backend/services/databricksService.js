@@ -1,28 +1,29 @@
 "use strict";
 
 const axios = require("axios");
+const { sendRLACNotification } = require("./emailService");
 
 const HOST = process.env.DATABRICKS_HOST;
 const TOKEN = process.env.DATABRICKS_TOKEN;
 const WAREHOUSE_ID = process.env.WAREHOUSE_ID || process.env.DATABRICKS_WAREHOUSE_ID;
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // CONFIGURATION & DEFAULTS
-// ─────────────────────────────────────────────────────────────────────────────
-const ROOT_CATALOG = process.env.ROOT_CATALOG || "main";
+
+const ROOT_CATALOG = process.env.ROOT_CATALOG     || "main";
 const META_CATALOG = process.env.METADATA_CATALOG || "workspace";
 
 // Governance Metadata Tables
-const POLICY_TABLE = `${META_CATALOG}.governance.access_policies`;
-const RLAC_TABLE = `${META_CATALOG}.governance.rlac_policies`;
-const AUDIT_TABLE = `${META_CATALOG}.governance.audit_logs`;
-const USER_TABLE = `${META_CATALOG}.governance.users`;
+const POLICY_TABLE  = `${META_CATALOG}.governance.access_policies`;
+const RLAC_TABLE    = `${META_CATALOG}.governance.rlac_policies`;
+const AUDIT_TABLE   = `${META_CATALOG}.governance.audit_logs`;
+const USER_TABLE    = `${META_CATALOG}.governance.users`;
+const GOV_CATALOG   = `${META_CATALOG}.governance`;
 const CONTROL_TABLE = `${META_CATALOG}.governance.user_access_control`;
-const GOV_CATALOG = `${META_CATALOG}.governance`;
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // CORE: escape a value for safe SQL string injection
-// ─────────────────────────────────────────────────────────────────────────────
+
 const esc = (value) => {
   if (value === null || value === undefined) return "NULL";
   return `'${String(value).replace(/'/g, "''").replace(/\\/g, "\\\\")}'`;
@@ -52,9 +53,9 @@ function sanitizeEmail(email) {
   return email.replace(/`/g, "");
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // CORE: execute any SQL statement against Databricks SQL Warehouse (async poll)
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function executeSQL(sql) {
   // Submit the statement
   const submit = await axios.post(
@@ -97,95 +98,95 @@ async function executeSQL(sql) {
   return result;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // CORE: execute SQL and return only the data_array rows (for SELECT)
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function fetchRows(sql) {
   const result = await executeSQL(sql);
   return result?.result?.data_array || [];
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // USER: login
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function loginUser(email, password) {
   return executeSQL(`
     SELECT email, password, role
-    FROM ${USER_TABLE}
+    FROM workspace.governance.users
     WHERE email = ${esc(email)} AND password = ${esc(password)}
   `);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // USER: register
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function registerUser(email, password, role) {
   return executeSQL(`
-    INSERT INTO ${USER_TABLE} (email, password, role)
+    INSERT INTO workspace.governance.users (email, password, role)
     VALUES (${esc(email)}, ${esc(password)}, ${esc(role)})
   `);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // USER: get all users (with department via join)
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function getAllUsers() {
   return executeSQL(`
     SELECT u.email, u.role, MAX(p.department) AS department
-    FROM ${USER_TABLE} u
-    LEFT JOIN ${POLICY_TABLE} p
+    FROM workspace.governance.users u
+    LEFT JOIN workspace.governance.access_policies p
       ON u.email = p.principal_name AND p.principal_type = 'USER'
     GROUP BY u.email, u.role
     ORDER BY u.email
   `);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // USER: update role
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function updateUserRole(email, role) {
   return executeSQL(`
-    UPDATE ${USER_TABLE}
+    UPDATE workspace.governance.users
     SET role = ${esc(role)}
     WHERE email = ${esc(email)}
   `);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // USER: update department
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function updateUserDepartment(email, department) {
   return executeSQL(`
-    UPDATE ${POLICY_TABLE}
+    UPDATE workspace.governance.access_policies
     SET department = ${esc(department)}
     WHERE principal_name = ${esc(email)}
       AND principal_type = 'USER'
   `);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // USER: delete user (policies first, then user)
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function deleteUser(email) {
   await executeSQL(`
-    DELETE FROM ${POLICY_TABLE}
+    DELETE FROM workspace.governance.access_policies
     WHERE principal_name = ${esc(email)}
       AND principal_type = 'USER'
   `);
   return executeSQL(`
-    DELETE FROM ${USER_TABLE}
+    DELETE FROM workspace.governance.users
     WHERE email = ${esc(email)}
   `);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // USER: get department for a user
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function getUserDepartment(email) {
   try {
     const rows = await fetchRows(`
       SELECT department
-      FROM ${POLICY_TABLE}
+      FROM workspace.governance.access_policies
       WHERE principal_name = ${esc(email)}
         AND principal_type = 'USER'
       LIMIT 1
@@ -198,9 +199,9 @@ async function getUserDepartment(email) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // USER: get resources available to a user (by department)
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function getUserResources(email) {
   const dept = await getUserDepartment(email);
   if (!dept) return { catalogs: [], schemas: [], tables: [] };
@@ -218,75 +219,75 @@ async function getUserResources(email) {
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // ACCESS REQUEST: submit
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function submitAccessRequest(user, catalog, schema, table, access) {
   return executeSQL(`
-    INSERT INTO ${META_CATALOG}.governance.user_requests (user, catalog_name, schema_name, table_name, access_type, status, requested_at)
+    INSERT INTO workspace.governance.user_requests (user, catalog_name, schema_name, table_name, access_type, status, requested_at)
     VALUES (${esc(user)}, ${esc(catalog)}, ${esc(schema)}, ${esc(table)}, ${esc(access)}, 'PENDING', current_timestamp())
   `);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // ACCESS REQUEST: get my requests
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function getMyRequests(email) {
   return executeSQL(`
     SELECT catalog, schema, \`table\`, access, status
-    FROM ${META_CATALOG}.governance.user_requests
+    FROM workspace.governance.user_requests
     WHERE user = ${esc(email)}
     ORDER BY created_at DESC
   `);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // ACCESS REQUEST: get pending (admin)
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function getPendingRequests() {
   return executeSQL(`
-    SELECT * FROM ${META_CATALOG}.governance.user_requests
+    SELECT * FROM workspace.governance.user_requests
     WHERE status = 'PENDING'
   `);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // ACCESS REQUEST: approve
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function approveRequest(user, table) {
   return executeSQL(`
-    UPDATE ${META_CATALOG}.governance.user_requests
+    UPDATE workspace.governance.user_requests
     SET status = 'APPROVED'
     WHERE user = ${esc(user)} AND \`table\` = ${esc(table)}
   `);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // ACCESS REQUEST: reject
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function rejectRequest(user, table) {
   return executeSQL(`
-    UPDATE ${META_CATALOG}.governance.user_requests
+    UPDATE workspace.governance.user_requests
     SET status = 'REJECTED'
     WHERE user = ${esc(user)} AND \`table\` = ${esc(table)}
   `);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // POLICY: get all policies (from access_policies table)
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function getAllPolicies() {
   return executeSQL(`
     SELECT principal_name AS user_email, catalog_name, schema_name, table_pattern, privilege, is_active
-    FROM ${POLICY_TABLE}
+    FROM workspace.governance.access_policies
     WHERE principal_type = 'USER'
     ORDER BY principal_name
   `);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // POLICY: get all policies — enriched for Policies page (with status/created_time)
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function getAllPoliciesEnriched() {
   // Real columns: principal_name, principal_type, catalog_name, schema_name,
   //               table_pattern, privilege, is_active, created_at, created_by, department
@@ -304,7 +305,7 @@ async function getAllPoliciesEnriched() {
         created_at                                                    AS created_time,
         revoked_at                                                    AS revoked_time,
         revoked_by
-      FROM ${POLICY_TABLE}
+      FROM workspace.governance.access_policies
       WHERE principal_type = 'USER'
       ORDER BY created_at DESC
     `);
@@ -316,13 +317,13 @@ async function getAllPoliciesEnriched() {
 
 
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // POLICY: get my active access
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function getMyAccess(email) {
   const rows = await fetchRows(`
     SELECT catalog_name, schema_name, table_pattern, privilege
-    FROM ${POLICY_TABLE}
+    FROM workspace.governance.access_policies
     WHERE principal_name = ${esc(email)}
       AND principal_type = 'USER'
       AND is_active = true
@@ -347,9 +348,9 @@ async function getMyAccess(email) {
   return enriched;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // POLICY: revoke a policy (soft-delete with timestamp)
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function revokePolicy(email, catalog, schema, table, revokedBy) {
   return executeSQL(`
     UPDATE ${POLICY_TABLE}
@@ -366,12 +367,12 @@ async function revokePolicy(email, catalog, schema, table, revokedBy) {
 // Keep alias for backward compatibility or direct replacement
 const deletePolicy = revokePolicy;
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // POLICY: toggle active state
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function togglePolicy(email, schema, table, active) {
   return executeSQL(`
-    UPDATE ${POLICY_TABLE}
+    UPDATE workspace.governance.access_policies
     SET is_active = ${active ? "true" : "false"}
     WHERE principal_name = ${esc(email)}
       AND principal_type = 'USER'
@@ -380,13 +381,13 @@ async function togglePolicy(email, schema, table, active) {
   `);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // POLICY: verify table access for a user
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function verifyTableAccess(email, table) {
   const rows = await fetchRows(`
     SELECT COUNT(*) as cnt
-    FROM ${POLICY_TABLE}
+    FROM workspace.governance.access_policies
     WHERE principal_name = ${esc(email)}
       AND principal_type = 'USER'
       AND table_pattern  = ${esc(table)}
@@ -395,9 +396,9 @@ async function verifyTableAccess(email, table) {
   return parseInt(rows?.[0]?.[0] || "0") > 0;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // PRIVILEGE MANAGEMENT: assign access + insert policy record
-// ─────────────────────────────────────────────────────────────────────────────
+
 // Metastore v1.0: INSERT/UPDATE/DELETE are not valid — use MODIFY for all writes
 const ALLOWED_PRIVILEGES = ["SELECT", "MODIFY", "ALL PRIVILEGES"];
 
@@ -472,9 +473,9 @@ async function assignAccess(user, catalog, schema, table, privilege, createdBy) 
   return { grantOk, grantWarning };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // GRANT: execute GRANT for multiple privileges
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function grantAccess({ catalog, schema, table, userEmail, privileges }) {
   const safeUser = String(userEmail).replace(/`/g, "");
   const safeCatalog = String(catalog).replace(/[^a-zA-Z0-9_\-]/g, "");
@@ -496,9 +497,9 @@ async function grantAccess({ catalog, schema, table, userEmail, privileges }) {
   return privList;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // GRANT: verify a user exists in SHOW GRANTS result
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function checkTableGrants({ catalog, schema, table }) {
   const safeCatalog = String(catalog).replace(/[^a-zA-Z0-9_\-]/g, "");
   const safeSchema = String(schema).replace(/[^a-zA-Z0-9_\-]/g, "");
@@ -510,9 +511,9 @@ async function checkTableGrants({ catalog, schema, table }) {
   return result?.result?.data_array || [];
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // POLICY: activate + set created_time (only if NULL)
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function activatePolicy({ policyId, userEmail, schemaName, tableName }) {
   // Uses real columns: principal_name, principal_type, created_at (no status column)
   return executeSQL(`
@@ -526,9 +527,9 @@ async function activatePolicy({ policyId, userEmail, schemaName, tableName }) {
   `);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // DIRECT ACCESS MANAGEMENT (Admin-Only System)
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 /**
  * Direct GRANT execution on Databricks
@@ -570,43 +571,65 @@ async function revokeDirectAccess(email, catalog, schema, table, privilege = "SE
 }
 
 /**
- * AUDIT LOGGING: Insert record into ${AUDIT_TABLE}
+ * AUDIT LOGGING: Insert record into workspace.governance.audit_logs
  * Schema: action_type, target_user, table_name, created_at
  */
 async function insertAuditLog(action, userEmail, tableName, executedBy, catalog, schema, policyId = null, privileges = null) {
+  // Self-healing: Ensure table exists
+  await executeSQL(`CREATE SCHEMA IF NOT EXISTS ${META_CATALOG}.governance`);
+  await executeSQL(`
+    CREATE TABLE IF NOT EXISTS ${AUDIT_TABLE} (
+      action_type STRING, target_user STRING, table_name STRING, executed_by STRING,
+      catalog_name STRING, schema_name STRING, policy_id STRING, privileges STRING,
+      created_at TIMESTAMP
+    )
+  `);
+
+  // Migration: If the table exists but uses the old 'timestamp' name, rename it
+  try {
+    const columns = await executeSQL(`DESCRIBE ${AUDIT_TABLE}`);
+    const hasOldCol = columns.result?.data_array?.some(c => c[0].toLowerCase() === 'timestamp');
+    if (hasOldCol) {
+      console.log(`[Migration] Renaming legacy 'timestamp' column to 'created_at' in ${AUDIT_TABLE}`);
+      await executeSQL(`ALTER TABLE ${AUDIT_TABLE} RENAME COLUMN timestamp TO created_at`);
+    }
+  } catch (e) {
+    // Ignore migration errors if describe fails
+  }
+
   return executeSQL(`
     INSERT INTO ${AUDIT_TABLE} 
-    (action_type, target_user, table_name, executed_by, catalog_name, schema_name, policy_id, privileges, created_at, created_time)
+    (action_type, target_user, table_name, executed_by, catalog_name, schema_name, policy_id, privileges, created_at)
     VALUES (
-      ${esc(action)}, 
-      ${esc(userEmail)}, 
-      ${esc(tableName)}, 
-      ${esc(executedBy)}, 
-      ${esc(catalog)}, 
-      ${esc(schema)}, 
-      ${esc(policyId)},
-      ${esc(privileges)},
-      current_timestamp(),
+      ${esc(action)}, ${esc(userEmail)}, ${esc(tableName)}, ${esc(executedBy)}, 
+      ${esc(catalog)}, ${esc(schema)}, ${esc(policyId)}, ${esc(privileges)}, 
       current_timestamp()
     )
   `);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // AUDIT LOGS: get all logs
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function getAuditLogs() {
-  return executeSQL(`
-    SELECT action_type, target_user, table_name, executed_by, catalog_name, schema_name, policy_id, privileges, created_at, created_time
-    FROM ${AUDIT_TABLE}
-    ORDER BY created_at DESC
-    LIMIT 100
-  `);
+  try {
+    return await executeSQL(`
+      SELECT action_type, target_user, table_name, executed_by, 
+             catalog_name, schema_name, policy_id, privileges, created_at,
+             date_format(created_at, 'yyyy-MM-dd HH:mm:ss') as created_time
+      FROM ${AUDIT_TABLE}
+      ORDER BY created_at DESC
+      LIMIT 100
+    `);
+  } catch (err) {
+    console.warn("⚠️ Audit logs table not found or inaccessible:", err.message);
+    return { result: { data_array: [] } };
+  }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // CATALOG BROWSING
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function listCatalogs() {
   const result = await executeSQL("SHOW CATALOGS");
   return result?.result?.data_array?.map(r => r[0]) || [];
@@ -651,9 +674,9 @@ async function getTableData(email, table) {
   return executeSQL(`SELECT * FROM ${GOV_CATALOG}.${safeTable} LIMIT 100`);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // GRANTS: get all grants on a specific table (SHOW GRANTS)
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function getAllGrantsForTable(catalog, schema, table) {
   const safeCat = String(catalog).replace(/[^a-zA-Z0-9_\-]/g, "");
   const safeSch = String(schema).replace(/[^a-zA-Z0-9_\-]/g, "");
@@ -707,22 +730,37 @@ async function getPortalMetadata() {
   return result?.result?.data_array || [];
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // ROW-LEVEL ACCESS CONTROL: data_access_policy table
 // Schema: principal_type, principal_name, groupcode, clustercode,
 //         companycode, plantcode, is_active
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function getRLACPolicies() {
-  return executeSQL(`
-    SELECT principal_type, principal_name, groupcode, clustercode,
-           companycode, plantcode, is_active
-    FROM ${RLAC_TABLE}
-    ORDER BY principal_name
-  `);
+  try {
+    return await executeSQL(`
+      SELECT principal_type, principal_name, groupcode, clustercode,
+             companycode, plantcode, is_active, source, created_at
+      FROM ${RLAC_TABLE}
+      ORDER BY created_at DESC
+    `);
+  } catch (err) {
+    console.warn("⚠️ RLAC policies table not found or inaccessible:", err.message);
+    return { result: { data_array: [] } };
+  }
 }
 
-async function upsertRLACPolicy({ principalType, principalName, groupcode, clustercode, companycode, plantcode, isActive = true }) {
-  return executeSQL(`
+async function upsertRLACPolicy({ principalType, principalName, groupcode, clustercode, companycode, plantcode, isActive = true, source = "portal" }) {
+  // Self-healing: Ensure table exists with all columns
+  await executeSQL(`CREATE SCHEMA IF NOT EXISTS ${META_CATALOG}.governance`);
+  await executeSQL(`
+    CREATE TABLE IF NOT EXISTS ${RLAC_TABLE} (
+      principal_type STRING, principal_name STRING, groupcode STRING,
+      clustercode STRING, companycode STRING, plantcode STRING, is_active BOOLEAN,
+      source STRING, created_at TIMESTAMP, updated_at TIMESTAMP
+    )
+  `);
+
+  const result = await executeSQL(`
     MERGE INTO ${RLAC_TABLE} t
     USING (
       SELECT
@@ -732,7 +770,8 @@ async function upsertRLACPolicy({ principalType, principalName, groupcode, clust
         ${esc(clustercode)}    AS clustercode,
         ${esc(companycode)}    AS companycode,
         ${esc(plantcode)}      AS plantcode,
-        ${isActive ? 'true' : 'false'} AS is_active
+        ${isActive ? 'true' : 'false'} AS is_active,
+        ${esc(source)}         AS source
     ) s
     ON t.principal_type = s.principal_type AND t.principal_name = s.principal_name
     WHEN MATCHED THEN UPDATE SET
@@ -740,13 +779,23 @@ async function upsertRLACPolicy({ principalType, principalName, groupcode, clust
       clustercode = s.clustercode,
       companycode = s.companycode,
       plantcode   = s.plantcode,
-      is_active   = s.is_active
+      is_active   = s.is_active,
+      source      = s.source,
+      updated_at  = current_timestamp()
     WHEN NOT MATCHED THEN INSERT (
-      principal_type, principal_name, groupcode, clustercode, companycode, plantcode, is_active
+      principal_type, principal_name, groupcode, clustercode, companycode, plantcode, is_active, source, created_at, updated_at
     ) VALUES (
-      s.principal_type, s.principal_name, s.groupcode, s.clustercode, s.companycode, s.plantcode, s.is_active
+      s.principal_type, s.principal_name, s.groupcode, s.clustercode, s.companycode, s.plantcode, s.is_active, s.source, 
+      current_timestamp(), current_timestamp()
     )
   `);
+
+  // Send email notification for USER principals
+  if (principalType === "USER" && isActive) {
+    sendRLACNotification(principalName, { groupcode, clustercode, companycode, plantcode });
+  }
+
+  return result;
 }
 
 async function deleteRLACPolicy(principalType, principalName) {
@@ -760,28 +809,42 @@ async function deleteRLACPolicy(principalType, principalName) {
   // 2. Delete from User Access Control Table (The "Passport" table)
   if (principalType === 'USER') {
     console.log(`[RLAC Cleanup] Removing user ${principalName} from Access Control Table`);
-    await executeSQL(`
-      DELETE FROM ${CONTROL_TABLE}
-      WHERE user_email = ${esc(principalName)}
-    `);
+    try {
+      await executeSQL(`
+        DELETE FROM ${CONTROL_TABLE}
+        WHERE user_email = ${esc(principalName)}
+      `);
+    } catch (e) {
+      console.warn(`[RLAC Cleanup] Could not delete from ${CONTROL_TABLE}:`, e.message);
+    }
   }
-
+  
   return { success: true };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // USER ACCESS CONTROL: biztraz_dev.bronze.user_access_control table
-// ─────────────────────────────────────────────────────────────────────────────
+
 async function getUserAccessControl() {
   return executeSQL(`
     SELECT user_email, user_name, user_role, user_status,
-           groupcode, clustercode, companycode, plantcode, storage_loc_code
+           groupcode, clustercode, companycode, plantcode, storage_loc_code, created_at
     FROM ${CONTROL_TABLE}
     ORDER BY user_email
   `);
 }
 
 async function upsertUserAccessControl({ userEmail, userName, userRole, userStatus, groupcode, clustercode, companycode, plantcode, storageLocCode }) {
+  // Self-healing: Ensure table exists
+  await executeSQL(`CREATE SCHEMA IF NOT EXISTS ${META_CATALOG}.governance`);
+  await executeSQL(`
+    CREATE TABLE IF NOT EXISTS ${CONTROL_TABLE} (
+      user_email STRING, user_name STRING, user_role STRING, user_status STRING,
+      groupcode STRING, clustercode STRING, companycode STRING, plantcode STRING, 
+      storage_loc_code STRING, created_at TIMESTAMP, updated_at TIMESTAMP
+    )
+  `);
+
   return executeSQL(`
     MERGE INTO ${CONTROL_TABLE} t
     USING (
@@ -805,13 +868,15 @@ async function upsertUserAccessControl({ userEmail, userName, userRole, userStat
       clustercode      = s.clustercode,
       companycode      = s.companycode,
       plantcode        = s.plantcode,
-      storage_loc_code = s.storage_loc_code
+      storage_loc_code = s.storage_loc_code,
+      updated_at       = current_timestamp()
     WHEN NOT MATCHED THEN INSERT (
       user_email, user_name, user_role, user_status,
-      groupcode, clustercode, companycode, plantcode, storage_loc_code
+      groupcode, clustercode, companycode, plantcode, storage_loc_code, created_at, updated_at
     ) VALUES (
       s.user_email, s.user_name, s.user_role, s.user_status,
-      s.groupcode, s.clustercode, s.companycode, s.plantcode, s.storage_loc_code
+      s.groupcode, s.clustercode, s.companycode, s.plantcode, s.storage_loc_code,
+      current_timestamp(), current_timestamp()
     )
   `);
 }
@@ -823,9 +888,9 @@ async function deleteUserAccessControl(userEmail) {
   `);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // EXPORTS
-// ─────────────────────────────────────────────────────────────────────────────
+
 module.exports = {
   // core
   executeSQL,
@@ -894,7 +959,7 @@ module.exports = {
     }
 
     const [ptype, pname, gcode, ccode, compcode, pcode] = policies[0];
-
+    
     // 2. Build the WHERE clause based on non-empty policy fields
     const safeTable = `${sanitizeId(catalog)}.${sanitizeId(schema)}.${sanitizeId(table)}`;
 
@@ -909,18 +974,18 @@ module.exports = {
 
     const filters = [];
     const tryFilter = (policyKey, value) => {
-      if (!value) return;
+      if (!value || value === "null" || value === "undefined") return;
       // Try exact, then underscore version, then _id version
       const underscoreVersion = policyKey.replace(/code$/, "_code");
       const idVersion = policyKey.replace(/code$/, "_id");
-
+      
       if (columns.includes(policyKey.toLowerCase())) {
         filters.push(`${policyKey} = ${esc(value)}`);
       } else if (columns.includes(underscoreVersion.toLowerCase())) {
         filters.push(`${underscoreVersion} = ${esc(value)}`);
       } else if (columns.includes(idVersion.toLowerCase())) {
         filters.push(`${idVersion} = ${esc(value)}`);
-      } else {
+      } else if (columns.length === 0) {
         // Fallback to literal if columns couldn't be fetched
         filters.push(`${policyKey} = ${esc(value)}`);
       }
@@ -932,7 +997,7 @@ module.exports = {
     tryFilter("plantcode", pcode);
 
     const whereClause = filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : "";
-
+    
     // 3. Execute the filtered query
     const sql = `SELECT * FROM ${safeTable} ${whereClause} LIMIT 10`;
     console.log(`[RLAC Preview] Executing: ${sql}`);
@@ -963,12 +1028,21 @@ module.exports = {
       { policyKey: "plantcode", dbKey: "plant_code" },
     ];
 
+    // Self-healing: Ensure table exists
+    await executeSQL(`
+      CREATE TABLE IF NOT EXISTS ${RLAC_TABLE} (
+        principal_type STRING, principal_name STRING, groupcode STRING,
+        clustercode STRING, companycode STRING, plantcode STRING, is_active BOOLEAN
+      )
+    `);
+
     const activeFilters = filterMappings
       .filter(m => columns.includes(m.dbKey))
       .map(m => `
         ${m.dbKey} IN (
-          SELECT ${m.policyKey} FROM ${CONTROL_TABLE} 
-          WHERE user_email = CURRENT_USER()
+          SELECT ${m.policyKey} FROM ${RLAC_TABLE} 
+          WHERE principal_name = CURRENT_USER()
+            AND is_active = true
         )
       `);
 

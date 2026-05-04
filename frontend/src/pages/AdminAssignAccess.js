@@ -173,19 +173,31 @@ function PreviewModal({ isOpen, onClose, principalName, showToast }) {
                                         <p style={{ fontSize: "14px", color: "#b91c1c", marginTop: "8px", maxWidth: "400px", margin: "8px auto" }}>The security policy correctly filtered out all rows from this table for the simulated user.</p>
                                     </div>
                                     
-                                    {data.appliedFilters && data.appliedFilters.length > 0 && (
+                                    {/* Debug Info */}
+                                    <div style={{ marginTop: "24px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
                                         <div style={{ padding: "20px", background: "#f8fafc", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
-                                            <div style={{ fontSize: "12px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
-                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                                                Active Security Filters
-                                            </div>
+                                            <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: "12px" }}>Applied SQL Filters</div>
                                             <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                                                {data.appliedFilters.map((f, i) => (
-                                                    <code key={i} style={{ background: "#fff", border: "1px solid #cbd5e1", padding: "4px 10px", borderRadius: "6px", fontSize: "12px", color: "#1e293b", fontWeight: 600 }}>{f}</code>
-                                                ))}
+                                                {data.appliedFilters && data.appliedFilters.length > 0 ? (
+                                                    data.appliedFilters.map((f, i) => (
+                                                        <code key={i} style={{ background: "#fff", border: "1px solid #cbd5e1", padding: "4px 10px", borderRadius: "6px", fontSize: "12px", color: "#1e293b", fontWeight: 600 }}>{f}</code>
+                                                    ))
+                                                ) : (
+                                                    <span style={{ fontSize: "12px", color: "#94a3b8", fontStyle: "italic" }}>No compatible security columns found in this table. Showing all rows.</span>
+                                                )}
                                             </div>
                                         </div>
-                                    )}
+                                        {data.policyUsed && (
+                                            <div style={{ padding: "20px", background: "#f8fafc", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
+                                                <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: "12px" }}>Simulated User Policy</div>
+                                                <div style={{ fontSize: "12px", color: "#475569", lineHeight: "1.6" }}>
+                                                    {Object.entries(data.policyUsed).map(([k, v]) => v && v !== "null" && (
+                                                        <div key={k}><strong>{k}:</strong> {v}</div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             ) : (
                                 <div style={{ border: "1px solid #e2e8f0", borderRadius: "16px", overflow: "hidden", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05)" }}>
@@ -737,7 +749,7 @@ function RLACTab({ showToast }) {
                             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
                                 <thead>
                                     <tr>
-                                        {["Type", "Principal", "Group", "Cluster", "Company", "Plant", "Active", "Actions"].map(h => (
+                                        {["Type", "Principal", "Group", "Cluster", "Company", "Plant", "Active", "Source", "Created At", "Actions"].map(h => (
                                             <th key={h} style={{ padding: "12px 16px", textAlign: "left", color: "#64748b", fontWeight: 700, fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid #e2e8f0" }}>{h}</th>
                                         ))}
                                     </tr>
@@ -755,6 +767,19 @@ function RLACTab({ showToast }) {
                                             <td style={{ padding: "14px 16px", color: "#64748b" }}>{row[5] || "—"}</td>
                                             <td style={{ padding: "14px 16px" }}>
                                                 <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: (row[6] === "true" || row[6] === true) ? "#22c55e" : "#cbd5e1" }} />
+                                            </td>
+                                            <td style={{ padding: "14px 16px" }}>
+                                                <span style={{
+                                                    display: "inline-flex", alignItems: "center", gap: "5px", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 700,
+                                                    background: row[7] === "portal" ? "#ede9fe" : "#fff7ed",
+                                                    color: row[7] === "portal" ? "#6d28d9" : "#c2410c",
+                                                }}>
+                                                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: row[7] === "portal" ? "#7c3aed" : "#f97316" }} />
+                                                    {row[7] === "portal" ? "Portal" : "Manual"}
+                                                </span>
+                                            </td>
+                                            <td style={{ padding: "14px 16px", color: "#94a3b8", fontSize: "12px" }}>
+                                                {row[8] ? new Date(row[8]).toLocaleDateString() : "—"}
                                             </td>
                                             <td style={{ padding: "14px 16px" }}>
                                                 <div style={{ display: "flex", gap: "8px" }}>

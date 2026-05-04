@@ -113,7 +113,7 @@ function AuditLogs() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
               <thead>
                 <tr>
-                  {["Time", "Action", "User Email", "Table"].map(h => (
+                  {["Time", "Action", "User Email", "Table", "Executed By", "Details"].map(h => (
                     <th key={h} style={{ padding: "12px 16px", textAlign: "left", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", fontSize: "11px", borderBottom: "1px solid #e2e8f0" }}>{h}</th>
                   ))}
                 </tr>
@@ -133,6 +133,10 @@ function AuditLogs() {
                     </td>
                     <td style={{ padding: "14px 16px", fontWeight: 600, color: "#1e293b" }}>{log.user_email}</td>
                     <td style={{ padding: "14px 16px", color: "#475569", fontFamily: "monospace", fontSize: "12px" }}>{log.table_name}</td>
+                    <td style={{ padding: "14px 16px", color: "#64748b" }}>{log.executed_by || "—"}</td>
+                    <td style={{ padding: "14px 16px", color: "#94a3b8", fontSize: "11px", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={log.privileges || log.details}>
+                      {log.privileges || log.details || "—"}
+                    </td>
                   </tr>
                 ))}
               </tbody>
